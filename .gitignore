@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Environment files
+.env
+*.env
+!.env.example
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+build/
+
+# Android / Gradle
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Artifacts
+*.apk
+*.aab
+*.ipa
