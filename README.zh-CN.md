@@ -145,6 +145,38 @@ gps-tracker-system/
 - `fix = 0` 的无效定位也会入库
 - 后端会把带时区的时间统一转成 UTC 再存储
 
+### MQTT 上传（可选）
+
+后端支持通过 MQTT 订阅 `gps/upload` 来接收定位数据。启用条件：
+
+- 在 `backend/.env` 中配置 `MQTT_HOST`（默认留空则不启用）
+- 可选配置 `MQTT_USERNAME` / `MQTT_PASSWORD` 进行鉴权
+
+默认配置示例：
+
+```env
+MQTT_HOST=127.0.0.1
+MQTT_PORT=1883
+MQTT_TOPIC=gps/upload
+MQTT_USERNAME=
+MQTT_PASSWORD=
+```
+
+发布的 Payload 与 HTTP 上传一致：
+
+```json
+{
+  "device_id": "gps_001",
+  "utc_time": "2026-03-19T06:30:00Z",
+  "lat": 31.2304,
+  "lng": 121.4737,
+  "speed": 35.5,
+  "course": 180.0,
+  "satellites": 8,
+  "fix": 1
+}
+```
+
 ## 六、接口定义
 
 接口基础地址示例：

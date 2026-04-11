@@ -17,6 +17,15 @@ class Settings(BaseSettings):
 
     device_offline_seconds: int = 300
 
+    mqtt_host: str = ""
+    mqtt_port: int = 1883
+    mqtt_username: str = ""
+    mqtt_password: str = ""
+    mqtt_topic: str = "gps/upload"
+    mqtt_client_id: str = "gps-backend"
+    mqtt_keepalive: int = 60
+    mqtt_qos: int = 1
+
     @property
     def mysql_dsn(self) -> str:
         return (

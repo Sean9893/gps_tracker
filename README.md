@@ -143,6 +143,38 @@ Notes:
 - `fix=0` is still stored in the database.
 - Backend converts timezone-aware timestamps to naive UTC before storage.
 
+### MQTT Upload (Optional)
+
+The backend can subscribe to MQTT topic `gps/upload` to accept GPS data. To enable:
+
+- Set `MQTT_HOST` in `backend/.env` (leave empty to disable)
+- Optionally set `MQTT_USERNAME` / `MQTT_PASSWORD` for auth
+
+Example:
+
+```env
+MQTT_HOST=127.0.0.1
+MQTT_PORT=1883
+MQTT_TOPIC=gps/upload
+MQTT_USERNAME=
+MQTT_PASSWORD=
+```
+
+Payload is the same as HTTP:
+
+```json
+{
+  "device_id": "gps_001",
+  "utc_time": "2026-03-19T06:30:00Z",
+  "lat": 31.2304,
+  "lng": 121.4737,
+  "speed": 35.5,
+  "course": 180.0,
+  "satellites": 8,
+  "fix": 1
+}
+```
+
 ## API Definition
 
 Base URL examples:
