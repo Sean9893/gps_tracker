@@ -33,21 +33,26 @@ def publish_device_command(device_id: str, command: DeviceCommand) -> str:
     if settings.mqtt_username:
         client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
 
+    loop_started = False
     try:
         client.connect(settings.mqtt_host, settings.mqtt_port, settings.mqtt_keepalive)
+        client.loop_start()
+        loop_started = True
         result = client.publish(
             topic,
             json.dumps(payload, ensure_ascii=False),
             qos=settings.mqtt_qos,
         )
         result.wait_for_publish(timeout=3)
-        if result.rc != mqtt.MQTT_ERR_SUCCESS:
+        if result.rc != mqtt.MQTT_ERR_SUCCESS or not result.is_published():
             raise MqttPublishError(f"MQTT publish failed, rc={result.rc}")
     except MqttPublishError:
         raise
     except Exception as exc:
         raise MqttPublishError(str(exc)) from exc
     finally:
+        if loop_started:
+            client.loop_stop()
         client.disconnect()
 
     return topic
