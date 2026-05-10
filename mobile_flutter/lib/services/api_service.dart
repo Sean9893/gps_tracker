@@ -54,6 +54,24 @@ class ApiService {
     return data.map((e) => GpsPoint.fromJson(e)).toList();
   }
 
+  Future<void> sendCommand({
+    required String deviceId,
+    required String command,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/device/$deviceId/command');
+    final resp = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'command': command}),
+        )
+        .timeout(_timeout);
+    final body = _decode(resp);
+    if (body['code'] != 0) {
+      throw Exception(body['msg'] ?? 'send command failed');
+    }
+  }
+
   Map<String, dynamic> _decode(http.Response resp) {
     final obj = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {

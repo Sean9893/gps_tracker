@@ -15,6 +15,7 @@ class DeviceDetailPage extends StatefulWidget {
 class _DeviceDetailPageState extends State<DeviceDetailPage> {
   final api = ApiService();
   bool loading = true;
+  bool sendingCommand = false;
   String? error;
   GpsPoint? latest;
   DeviceStatus? status;
@@ -44,6 +45,38 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
     }
   }
 
+  Future<void> _sendCommand(String command, String label) async {
+    setState(() => sendingCommand = true);
+    try {
+      await api.sendCommand(deviceId: widget.deviceId, command: command);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$label command sent')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Command failed: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => sendingCommand = false);
+      }
+    }
+  }
+
+  Widget _commandButton({
+    required IconData icon,
+    required String label,
+    required String command,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: sendingCommand ? null : () => _sendCommand(command, label),
+      icon: Icon(icon),
+      label: Text(label),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,6 +102,41 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                           Text('Speed: ${latest!.speed}'),
                           Text('Satellites: ${latest!.satellites}'),
                           Text('Fix: ${latest!.fix == 1 ? "Valid" : "Invalid"}'),
+                          const SizedBox(height: 16),
+                          Center(
+                            child: Column(
+                              children: [
+                                _commandButton(
+                                  icon: Icons.keyboard_arrow_up,
+                                  label: 'Forward',
+                                  command: 'forward',
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _commandButton(
+                                      icon: Icons.keyboard_arrow_left,
+                                      label: 'Left',
+                                      command: 'left',
+                                    ),
+                                    const SizedBox(width: 12),
+                                    _commandButton(
+                                      icon: Icons.keyboard_arrow_right,
+                                      label: 'Right',
+                                      command: 'right',
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                _commandButton(
+                                  icon: Icons.keyboard_arrow_down,
+                                  label: 'Backward',
+                                  command: 'backward',
+                                ),
+                              ],
+                            ),
+                          ),
                           const SizedBox(height: 16),
                           Row(
                             children: [

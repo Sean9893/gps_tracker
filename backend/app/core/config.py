@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     mqtt_username: str = ""
     mqtt_password: str = ""
     mqtt_topic: str = "gps/upload"
+    mqtt_command_topic_template: str = "gps/device/{device_id}/command"
     mqtt_client_id: str = "gps-backend"
     mqtt_keepalive: int = 60
     mqtt_qos: int = 1
