@@ -43,7 +43,7 @@ class Uploader:
     def upload_sync(self, base_url: str, data: GpsData) -> UploadResult:
         url = base_url.rstrip("/") + "/api/gps/upload"
         payload = asdict(data)
-        payload["utc_time"] = data.utc_time.isoformat().replace("+00:00", "Z")
+        payload.pop("utc_time", None)
 
         last_error = "unknown error"
         for i in range(self.retry_count + 1):

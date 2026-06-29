@@ -2,7 +2,6 @@ import argparse
 import json
 import math
 import time
-from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -39,10 +38,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def iso_utc(ts: datetime) -> str:
-    return ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
 def circle_point(center_lat: float, center_lng: float, radius_m: float, angle_deg: float) -> tuple[float, float]:
     angle_rad = math.radians(angle_deg)
     lat_offset = radius_m * math.cos(angle_rad) / EARTH_METERS_PER_DEGREE
@@ -73,8 +68,6 @@ def main() -> int:
 
     current_angle = args.start_angle
     sent = 0
-    current_time = datetime.now(timezone.utc)
-
     print(f"upload url: {upload_url}")
     print(f"device id : {args.device_id}")
     print("proxy mode: disabled")
@@ -85,7 +78,6 @@ def main() -> int:
             lat, lng = circle_point(args.lat, args.lng, args.radius_m, current_angle)
             payload = {
                 "device_id": args.device_id,
-                "utc_time": iso_utc(current_time),
                 "lat": round(lat, 6),
                 "lng": round(lng, 6),
                 "speed": args.speed,
@@ -98,7 +90,7 @@ def main() -> int:
                 result = post_json(session, upload_url, payload)
                 print(
                     f"[{sent + 1}] uploaded lat={payload['lat']} lng={payload['lng']} "
-                    f"utc={payload['utc_time']} result={result}"
+                    f"result={result}"
                 )
             except requests.HTTPError as exc:
                 print(f"[{sent + 1}] {exc}")
@@ -107,7 +99,6 @@ def main() -> int:
 
             sent += 1
             current_angle += args.step_deg
-            current_time += timedelta(seconds=args.interval)
 
             if args.count == 0 or sent < args.count:
                 time.sleep(args.interval)

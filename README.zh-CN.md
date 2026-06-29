@@ -104,7 +104,7 @@ gps-tracker-system/
 | --- | --- | --- |
 | `id` | BIGINT | 主键 |
 | `device_id` | VARCHAR(64) | 设备 ID |
-| `utc_time` | DATETIME | GPS 记录时间，UTC |
+| `utc_time` | DATETIME | 服务器接收定位的 UTC 时间 |
 | `lat` | DOUBLE | 纬度 |
 | `lng` | DOUBLE | 经度 |
 | `speed` | DOUBLE | 速度 |
@@ -122,7 +122,6 @@ gps-tracker-system/
 ```json
 {
   "device_id": "gps_001",
-  "utc_time": "2026-03-19T06:30:00Z",
   "lat": 31.2304,
   "lng": 121.4737,
   "speed": 35.5,
@@ -135,7 +134,6 @@ gps-tracker-system/
 字段约束：
 
 - `device_id`：必填，长度 `1..64`
-- `utc_time`：ISO 8601 时间字符串
 - `lat`：范围 `-90..90`
 - `lng`：范围 `-180..180`
 - `fix`：只能是 `0` 或 `1`
@@ -143,7 +141,7 @@ gps-tracker-system/
 补充说明：
 
 - `fix = 0` 的无效定位也会入库
-- 后端会把带时区的时间统一转成 UTC 再存储
+- 定位时间由服务器接收数据时统一生成，小车无需上传时间
 
 ### MQTT 上传（可选）
 
@@ -167,7 +165,6 @@ MQTT_PASSWORD=
 ```json
 {
   "device_id": "gps_001",
-  "utc_time": "2026-03-19T06:30:00Z",
   "lat": 31.2304,
   "lng": 121.4737,
   "speed": 35.5,
@@ -225,7 +222,6 @@ curl -X POST http://127.0.0.1:8000/api/gps/upload \
   -H "Content-Type: application/json" \
   -d '{
     "device_id": "gps_001",
-    "utc_time": "2026-03-19T06:30:00Z",
     "lat": 31.2304,
     "lng": 121.4737,
     "speed": 35.5,
@@ -468,7 +464,6 @@ curl -X POST http://121.43.25.166:8000/api/gps/upload \
   -H "Content-Type: application/json" \
   -d '{
     "device_id": "gps_001",
-    "utc_time": "2026-03-20T08:00:00Z",
     "lat": 31.2304,
     "lng": 121.4737,
     "speed": 36.5,
@@ -694,7 +689,6 @@ curl -X POST http://127.0.0.1:8000/api/gps/upload \
   -H "Content-Type: application/json" \
   -d '{
     "device_id": "gps_001",
-    "utc_time": "2026-03-19T06:30:00Z",
     "lat": 31.2304,
     "lng": 121.4737,
     "speed": 35.5,

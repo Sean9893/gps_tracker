@@ -1,11 +1,12 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class GpsUploadReq(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     device_id: str = Field(min_length=1, max_length=64)
-    utc_time: datetime
     lat: float
     lng: float
     speed: float = 0

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from .types import GpsData
@@ -17,7 +17,6 @@ def parse_json_line(line: str) -> GpsData:
 
     required_fields = [
         "device_id",
-        "utc_time",
         "lat",
         "lng",
         "speed",
@@ -31,8 +30,7 @@ def parse_json_line(line: str) -> GpsData:
 
     try:
         device_id = str(obj["device_id"]).strip()
-        utc_time_raw = str(obj["utc_time"]).replace("Z", "+00:00")
-        utc_time = datetime.fromisoformat(utc_time_raw)
+        utc_time = datetime.now(timezone.utc)
         lat = float(obj["lat"])
         lng = float(obj["lng"])
         speed = float(obj["speed"])

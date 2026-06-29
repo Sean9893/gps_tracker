@@ -91,7 +91,6 @@ def upload_gps_heartbeat(args: argparse.Namespace, session: requests.Session) ->
     url = args.api_base_url.rstrip("/") + "/api/gps/upload"
     payload = {
         "device_id": args.device_id,
-        "utc_time": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "lat": args.lat,
         "lng": args.lng,
         "speed": args.speed,

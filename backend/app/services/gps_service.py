@@ -21,9 +21,10 @@ def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
         # fix=0 仍允许入库，便于状态分析
         pass
 
+    now = datetime.utcnow()
     record = GpsRecord(
         device_id=req.device_id,
-        utc_time=_naive_utc(req.utc_time),
+        utc_time=now,
         lat=req.lat,
         lng=req.lng,
         speed=req.speed,
@@ -34,7 +35,6 @@ def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
     db.add(record)
 
     device = db.scalar(select(DeviceInfo).where(DeviceInfo.device_id == req.device_id))
-    now = datetime.utcnow()
     if not device:
         device = DeviceInfo(
             device_id=req.device_id,

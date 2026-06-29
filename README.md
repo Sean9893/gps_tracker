@@ -102,7 +102,7 @@ Stores every uploaded GPS point.
 | --- | --- | --- |
 | `id` | BIGINT | Primary key |
 | `device_id` | VARCHAR(64) | Device identifier |
-| `utc_time` | DATETIME | GPS UTC time |
+| `utc_time` | DATETIME | Server receive time in UTC |
 | `lat` | DOUBLE | Latitude |
 | `lng` | DOUBLE | Longitude |
 | `speed` | DOUBLE | Speed |
@@ -120,7 +120,6 @@ Request body:
 ```json
 {
   "device_id": "gps_001",
-  "utc_time": "2026-03-19T06:30:00Z",
   "lat": 31.2304,
   "lng": 121.4737,
   "speed": 35.5,
@@ -136,12 +135,11 @@ Validation rules:
 - `lat`: `-90..90`
 - `lng`: `-180..180`
 - `fix`: must be `0` or `1`
-- `utc_time`: ISO 8601 datetime
 
 Notes:
 
 - `fix=0` is still stored in the database.
-- Backend converts timezone-aware timestamps to naive UTC before storage.
+- The server assigns the current UTC time when it receives each location.
 
 ### MQTT Upload (Optional)
 
@@ -165,7 +163,6 @@ Payload is the same as HTTP:
 ```json
 {
   "device_id": "gps_001",
-  "utc_time": "2026-03-19T06:30:00Z",
   "lat": 31.2304,
   "lng": 121.4737,
   "speed": 35.5,
@@ -195,7 +192,6 @@ curl -X POST http://127.0.0.1:8000/api/gps/upload \
   -H "Content-Type: application/json" \
   -d '{
     "device_id": "gps_001",
-    "utc_time": "2026-03-19T06:30:00Z",
     "lat": 31.2304,
     "lng": 121.4737,
     "speed": 35.5,
@@ -252,7 +248,6 @@ Success response example:
   "msg": "success",
   "data": {
     "device_id": "gps_001",
-    "utc_time": "2026-03-19T06:30:00Z",
     "lat": 31.2304,
     "lng": 121.4737,
     "speed": 35.5,
