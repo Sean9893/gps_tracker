@@ -72,6 +72,45 @@ class ApiService {
     }
   }
 
+  Future<GeofenceConfig> fetchGeofence(String deviceId) async {
+    final encodedId = Uri.encodeComponent(deviceId);
+    final uri = Uri.parse('$baseUrl/api/geofence/$encodedId');
+    final resp = await http.get(uri).timeout(_timeout);
+    final body = _decode(resp);
+    if (body['code'] != 0 || body['data'] == null) {
+      throw Exception(body['msg'] ?? '获取电子围栏失败');
+    }
+    return GeofenceConfig.fromJson(body['data']);
+  }
+
+  Future<GeofenceConfig> saveGeofence({
+    required String deviceId,
+    required double centerLat,
+    required double centerLng,
+    required double radiusM,
+    required bool enabled,
+  }) async {
+    final encodedId = Uri.encodeComponent(deviceId);
+    final uri = Uri.parse('$baseUrl/api/geofence/$encodedId');
+    final resp = await http
+        .put(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'center_lat': centerLat,
+            'center_lng': centerLng,
+            'radius_m': radiusM,
+            'enabled': enabled,
+          }),
+        )
+        .timeout(_timeout);
+    final body = _decode(resp);
+    if (body['code'] != 0 || body['data'] == null) {
+      throw Exception(body['msg'] ?? '保存电子围栏失败');
+    }
+    return GeofenceConfig.fromJson(body['data']);
+  }
+
   Map<String, dynamic> _decode(http.Response resp) {
     final obj = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {

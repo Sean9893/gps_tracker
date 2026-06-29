@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.models.device_info import DeviceInfo
 from app.models.gps_record import GpsRecord
 from app.schemas.gps import GpsUploadReq
+from app.services.geofence_service import evaluate_geofence
 
 
 def _naive_utc(dt: datetime) -> datetime:
@@ -45,6 +46,9 @@ def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
     else:
         device.status = 1
         device.last_online_time = now
+
+    if req.fix == 1:
+        evaluate_geofence(db, req.device_id, req.lat, req.lng, now)
 
     db.commit()
 

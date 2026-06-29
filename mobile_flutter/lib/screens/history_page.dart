@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+
 import '../app_config.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../utils/coordinate_converter.dart';
 
 class HistoryPage extends StatefulWidget {
   final String deviceId;
+
   const HistoryPage({super.key, required this.deviceId});
 
   @override
@@ -21,30 +25,38 @@ class _HistoryPageState extends State<HistoryPage> {
   String? error;
   bool loading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _query();
+  }
+
   Future<void> _pickStart() async {
-    final d = await showDatePicker(
+    final date = await showDatePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       initialDate: start.toLocal(),
+      helpText: '选择开始日期',
     );
-    if (d != null) {
+    if (date != null) {
       setState(() {
-        start = DateTime.utc(d.year, d.month, d.day, 0, 0, 0);
+        start = DateTime.utc(date.year, date.month, date.day);
       });
     }
   }
 
   Future<void> _pickEnd() async {
-    final d = await showDatePicker(
+    final date = await showDatePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       initialDate: end.toLocal(),
+      helpText: '选择结束日期',
     );
-    if (d != null) {
+    if (date != null) {
       setState(() {
-        end = DateTime.utc(d.year, d.month, d.day, 23, 59, 59);
+        end = DateTime.utc(date.year, date.month, date.day, 23, 59, 59);
       });
     }
   }
@@ -55,72 +67,169 @@ class _HistoryPageState extends State<HistoryPage> {
       error = null;
     });
     try {
-      final result = await api.fetchHistory(deviceId: widget.deviceId, startUtc: start, endUtc: end);
-      setState(() => points = result);
+      final result = await api.fetchHistory(
+        deviceId: widget.deviceId,
+        startUtc: start,
+        endUtc: end,
+      );
+      if (mounted) setState(() => points = result);
     } catch (e) {
-      setState(() => error = e.toString());
+      if (mounted) setState(() => error = e.toString());
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final latlngs = points.map((e) => LatLng(e.lat, e.lng)).toList();
-    final center = latlngs.isNotEmpty ? latlngs.first : const LatLng(31.2304, 121.4737);
+    final latLngs = points
+        .map((point) => CoordinateConverter.wgs84ToGcj02(point.lat, point.lng))
+        .toList();
+    final center =
+        latLngs.isNotEmpty ? latLngs.first : const LatLng(31.2304, 121.4737);
+    final dateFormat = DateFormat('MM月dd日');
 
     return Scaffold(
-      appBar: AppBar(title: Text('History ${widget.deviceId}')),
+      appBar: AppBar(title: const Text('历史轨迹')),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            color: Theme.of(context).colorScheme.surface,
+            child: Column(
               children: [
-                ElevatedButton(onPressed: _pickStart, child: Text('Start ${start.toIso8601String().substring(0, 10)}')),
-                ElevatedButton(onPressed: _pickEnd, child: Text('End ${end.toIso8601String().substring(0, 10)}')),
-                ElevatedButton(onPressed: loading ? null : _query, child: const Text('Query history')),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickStart,
+                        icon: const Icon(Icons.calendar_today_outlined),
+                        label: Text('开始 ${dateFormat.format(start.toLocal())}'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickEnd,
+                        icon: const Icon(Icons.event_outlined),
+                        label: Text('结束 ${dateFormat.format(end.toLocal())}'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: loading ? null : _query,
+                    icon: loading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.search),
+                    label: Text(loading ? '查询中' : '查询轨迹'),
+                  ),
+                ),
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '查询失败：$error',
+                      style: const TextStyle(color: Color(0xFFC43D3D)),
+                    ),
+                  ),
               ],
             ),
           ),
-          if (error != null) Padding(padding: const EdgeInsets.all(8), child: Text('Request failed: $error')),
-          if (!loading && points.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(8),
-              child: Text('No data'),
-            ),
           Expanded(
-            child: FlutterMap(
-              options: MapOptions(initialCenter: center, initialZoom: 13),
+            child: Stack(
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: AppConfig.androidApplicationId,
-                ),
-                if (latlngs.isNotEmpty)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(points: latlngs, strokeWidth: 4, color: Colors.blue),
-                    ],
+                FlutterMap(
+                  options: MapOptions(
+                    initialCenter: center,
+                    initialZoom: 13,
                   ),
-                if (latlngs.isNotEmpty)
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: latlngs.first,
-                        width: 36,
-                        height: 36,
-                        child: const Icon(Icons.play_arrow, color: Colors.green),
+                  children: [
+                    TileLayer(
+                      urlTemplate: AppConfig.mapTileUrlTemplate,
+                      subdomains: AppConfig.mapTileSubdomains,
+                      userAgentPackageName: AppConfig.androidApplicationId,
+                    ),
+                    if (latLngs.isNotEmpty)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: latLngs,
+                            strokeWidth: 5,
+                            color: const Color(0xFF176B5B),
+                          ),
+                        ],
                       ),
-                      Marker(
-                        point: latlngs.last,
-                        width: 36,
-                        height: 36,
-                        child: const Icon(Icons.flag, color: Colors.red),
+                    if (latLngs.isNotEmpty)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: latLngs.first,
+                            width: 42,
+                            height: 42,
+                            child: const Icon(
+                              Icons.play_circle_fill,
+                              color: Color(0xFF18794E),
+                              size: 34,
+                            ),
+                          ),
+                          Marker(
+                            point: latLngs.last,
+                            width: 42,
+                            height: 42,
+                            child: const Icon(
+                              Icons.flag_circle,
+                              color: Color(0xFFC43D3D),
+                              size: 34,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                  ],
+                ),
+                if (!loading && points.isEmpty)
+                  const Center(
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      child: Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        child: Text('这个时间段没有轨迹数据'),
+                      ),
+                    ),
+                  ),
+                if (points.isNotEmpty)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 16,
+                    child: SafeArea(
+                      top: false,
+                      child: Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            '共 ${points.length} 个定位点  ·  '
+                            '${DateFormat('MM-dd HH:mm').format(points.first.utcTime.toLocal())}'
+                            ' 至 '
+                            '${DateFormat('MM-dd HH:mm').format(points.last.utcTime.toLocal())}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
               ],
             ),

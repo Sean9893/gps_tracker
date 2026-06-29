@@ -184,6 +184,34 @@ MQTT_PASSWORD=
 - 本地开发：`http://127.0.0.1:8000`
 - 阿里云部署示例：`http://121.43.25.166:8000`
 
+## 电子围栏
+
+系统支持为每台设备配置一个圆形电子围栏。围栏包含中心经纬度、半径和启用状态。每次收到有效 GPS 定位后，后端会自动计算车辆与围栏中心的距离，并更新车辆位于围栏内或围栏外的状态。
+
+已有数据库升级时先执行：
+
+```bash
+mysql -u gps_user -p gps_tracker < backend/sql/geofence_migration.sql
+```
+
+围栏接口：
+
+```text
+GET /api/geofence/{device_id}
+PUT /api/geofence/{device_id}
+```
+
+保存示例：
+
+```json
+{
+  "center_lat": 31.2304,
+  "center_lng": 121.4737,
+  "radius_m": 500,
+  "enabled": true
+}
+```
+
 ### 1. 上传定位数据
 
 - 方法：`POST`

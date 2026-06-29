@@ -81,3 +81,43 @@ class DeviceStatus {
     );
   }
 }
+
+class GeofenceConfig {
+  final String deviceId;
+  final bool configured;
+  final bool enabled;
+  final double? centerLat;
+  final double? centerLng;
+  final double? radiusM;
+  final bool? inside;
+  final double? distanceM;
+  final DateTime? lastCheckTime;
+
+  GeofenceConfig({
+    required this.deviceId,
+    required this.configured,
+    required this.enabled,
+    required this.centerLat,
+    required this.centerLng,
+    required this.radiusM,
+    required this.inside,
+    required this.distanceM,
+    required this.lastCheckTime,
+  });
+
+  factory GeofenceConfig.fromJson(Map<String, dynamic> json) {
+    return GeofenceConfig(
+      deviceId: json['device_id'] ?? '',
+      configured: json['configured'] ?? false,
+      enabled: json['enabled'] ?? false,
+      centerLat: (json['center_lat'] as num?)?.toDouble(),
+      centerLng: (json['center_lng'] as num?)?.toDouble(),
+      radiusM: (json['radius_m'] as num?)?.toDouble(),
+      inside: json['inside'],
+      distanceM: (json['distance_m'] as num?)?.toDouble(),
+      lastCheckTime: json['last_check_time'] == null
+          ? null
+          : DateTime.parse(json['last_check_time']),
+    );
+  }
+}
