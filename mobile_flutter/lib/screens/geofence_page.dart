@@ -6,6 +6,7 @@ import '../app_config.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../utils/coordinate_converter.dart';
+import '../widgets/wheelchair_icon.dart';
 
 class GeofencePage extends StatefulWidget {
   final String deviceId;
@@ -120,8 +121,8 @@ class _GeofencePageState extends State<GeofencePage> {
   String _statusText() {
     if (!(fence?.configured ?? false)) return '尚未设置';
     if (!(fence?.enabled ?? false)) return '已停用';
-    if (fence?.inside == true) return '车辆在围栏内';
-    if (fence?.inside == false) return '车辆已离开围栏';
+    if (fence?.inside == true) return '轮椅在围栏内';
+    if (fence?.inside == false) return '轮椅已离开围栏';
     return '等待定位数据';
   }
 
@@ -248,10 +249,9 @@ class _GeofencePageState extends State<GeofencePage> {
                                   point: latestPoint,
                                   width: 44,
                                   height: 44,
-                                  child: const Icon(
-                                    Icons.directions_car_filled,
-                                    color: Color(0xFFC43D3D),
-                                    size: 34,
+                                  child: const WheelchairIcon(
+                                    size: 42,
+                                    padding: 2,
                                   ),
                                 ),
                             ],
@@ -293,7 +293,7 @@ class _GeofencePageState extends State<GeofencePage> {
                                       ? null
                                       : _useLatestLocation,
                                   icon: const Icon(Icons.my_location),
-                                  label: const Text('使用车辆位置'),
+                                  label: const Text('使用轮椅位置'),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -315,7 +315,7 @@ class _GeofencePageState extends State<GeofencePage> {
                             ),
                             const SizedBox(height: 6),
                             const Text(
-                              '点击地图可调整中心，车辆图标表示最新位置。',
+                              '点击地图可调整中心，轮椅图标表示最新位置。',
                               style: TextStyle(
                                   fontSize: 12, color: Colors.black54),
                             ),

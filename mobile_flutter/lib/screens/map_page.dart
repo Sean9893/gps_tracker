@@ -8,6 +8,7 @@ import '../app_config.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../utils/coordinate_converter.dart';
+import '../widgets/wheelchair_icon.dart';
 
 class MapPage extends StatefulWidget {
   final String deviceId;
@@ -23,6 +24,7 @@ class _MapPageState extends State<MapPage> {
   final mapController = MapController();
   Timer? timer;
   GpsPoint? latest;
+  bool online = false;
   String? error;
   bool following = true;
 
@@ -41,10 +43,16 @@ class _MapPageState extends State<MapPage> {
 
   Future<void> _load() async {
     try {
-      final point = await api.fetchLatest(widget.deviceId);
+      final results = await Future.wait([
+        api.fetchLatest(widget.deviceId),
+        api.fetchStatus(widget.deviceId),
+      ]);
+      final point = results[0] as GpsPoint?;
+      final status = results[1] as DeviceStatus;
       if (!mounted) return;
       setState(() {
         latest = point;
+        online = status.online;
         error = null;
       });
       if (point != null && following) {
@@ -78,7 +86,7 @@ class _MapPageState extends State<MapPage> {
         title: const Text('实时位置'),
         actions: [
           IconButton(
-            tooltip: '定位车辆',
+            tooltip: '定位轮椅',
             onPressed: latest == null ? null : _locate,
             icon: const Icon(Icons.my_location),
           ),
@@ -121,10 +129,10 @@ class _MapPageState extends State<MapPage> {
                             ),
                           ],
                         ),
-                        child: const Icon(
-                          Icons.directions_car_filled,
-                          size: 30,
-                          color: Color(0xFFC43D3D),
+                        child: const WheelchairIcon(
+                          size: 46,
+                          padding: 2,
+                          borderRadius: BorderRadius.all(Radius.circular(99)),
                         ),
                       ),
                     ),
@@ -166,14 +174,14 @@ class _MapPageState extends State<MapPage> {
                       children: [
                         Expanded(
                           child: _MapMetric(
-                            label: '速度',
-                            value: '${latest!.speed.toStringAsFixed(1)} km/h',
+                            label: '运动状态',
+                            value: latest!.moving ? '运动' : '静止',
                           ),
                         ),
                         Expanded(
                           child: _MapMetric(
                             label: '卫星',
-                            value: '${latest!.satellites} 颗',
+                            value: '${online ? 8 : 0} 颗',
                           ),
                         ),
                         Expanded(

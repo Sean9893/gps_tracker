@@ -156,6 +156,7 @@ gps-tracker-system/
 MQTT_HOST=127.0.0.1
 MQTT_PORT=1883
 MQTT_TOPIC=gps/upload
+MQTT_HEALTH_TOPIC=health/upload
 MQTT_USERNAME=
 MQTT_PASSWORD=
 ```
@@ -172,6 +173,34 @@ MQTT_PASSWORD=
   "satellites": 8,
   "fix": 1
 }
+```
+
+心率和血氧使用独立 Topic `health/upload`，不放入 GPS JSON。单片机每 10 秒发布一次：
+
+```json
+{
+  "device_id": "gps_001",
+  "heart_rate": 86,
+  "spo2": 98
+}
+```
+
+字段范围：
+
+- `heart_rate`：整数，范围 `0` 到 `999`
+- `spo2`：整数，范围 `0` 到 `100`
+- 心率超过 `200` 时，App 详情页显示 `——`
+
+已有数据库升级时执行一次：
+
+```bash
+mysql -u gps_user -p gps_tracker < backend/sql/add_health_record.sql
+```
+
+查询设备最新健康数据：
+
+```text
+GET /api/health/latest?device_id=gps_001
 ```
 
 ## 六、接口定义

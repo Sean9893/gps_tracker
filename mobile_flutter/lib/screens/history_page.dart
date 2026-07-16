@@ -7,6 +7,7 @@ import '../app_config.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../utils/coordinate_converter.dart';
+import '../widgets/wheelchair_icon.dart';
 
 class HistoryPage extends StatefulWidget {
   final String deviceId;
@@ -329,9 +330,11 @@ class _HistoryPageState extends State<HistoryPage> {
                                     ),
                                   ],
                                 ),
-                                child: const Icon(
-                                  Icons.directions_car_filled,
-                                  color: Color(0xFF176B5B),
+                                child: const WheelchairIcon(
+                                  size: 42,
+                                  padding: 2,
+                                  borderRadius:
+                                      BorderRadius.all(Radius.circular(99)),
                                 ),
                               ),
                             ),
@@ -405,7 +408,8 @@ class _HistoryPageState extends State<HistoryPage> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      '速度 ${selectedPoint.speed.toStringAsFixed(1)} km/h',
+                                      '状态 ${selectedPoint.moving ? '运动' : '静止'}  ·  '
+                                      '位移 ${selectedPoint.movementDistanceM.toStringAsFixed(1)} 米',
                                     ),
                                   ),
                                   Text(

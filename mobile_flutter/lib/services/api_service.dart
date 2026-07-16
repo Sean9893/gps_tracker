@@ -35,6 +35,15 @@ class ApiService {
     return DeviceStatus.fromJson(body['data']);
   }
 
+  Future<HealthData?> fetchLatestHealth(String deviceId) async {
+    final encodedId = Uri.encodeQueryComponent(deviceId);
+    final uri = Uri.parse('$baseUrl/api/health/latest?device_id=$encodedId');
+    final resp = await http.get(uri).timeout(_timeout);
+    final body = _decode(resp);
+    if (body['code'] != 0 || body['data'] == null) return null;
+    return HealthData.fromJson(body['data']);
+  }
+
   Future<List<GpsPoint>> fetchHistory({
     required String deviceId,
     required DateTime startUtc,

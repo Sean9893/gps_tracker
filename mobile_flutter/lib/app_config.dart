@@ -1,7 +1,7 @@
 class AppConfig {
   const AppConfig._();
 
-  static const String appName = 'GPS Tracker';
+  static const String appName = '轮椅定位';
   static const String androidApplicationId = 'com.example.gps_tracker_app';
   static const String mapTileUrlTemplate =
       'https://webrd0{s}.is.autonavi.com/appmaptile?'

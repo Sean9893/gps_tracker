@@ -7,7 +7,9 @@ from app.core.config import settings
 from app.models.device_info import DeviceInfo
 from app.models.gps_record import GpsRecord
 from app.schemas.gps import GpsUploadReq
-from app.services.geofence_service import evaluate_geofence
+from app.services.geofence_service import distance_m, evaluate_geofence
+
+MOVEMENT_THRESHOLD_M = 10.0
 
 
 def _naive_utc(dt: datetime) -> datetime:
@@ -63,6 +65,30 @@ def get_latest(db: Session, device_id: str) -> GpsRecord | None:
     return db.scalar(stmt)
 
 
+def get_movement_status(db: Session, device_id: str) -> dict:
+    stmt = (
+        select(GpsRecord)
+        .where(GpsRecord.device_id == device_id, GpsRecord.fix == 1)
+        .order_by(desc(GpsRecord.utc_time), desc(GpsRecord.id))
+        .limit(2)
+    )
+    rows = list(db.scalars(stmt))
+    if len(rows) < 2:
+        return {"moving": False, "movement_distance_m": 0.0}
+
+    current, previous = rows[0], rows[1]
+    movement_distance = distance_m(
+        previous.lat,
+        previous.lng,
+        current.lat,
+        current.lng,
+    )
+    return {
+        "moving": movement_distance > MOVEMENT_THRESHOLD_M,
+        "movement_distance_m": movement_distance,
+    }
+
+
 def get_history(db: Session, device_id: str, start: datetime, end: datetime) -> list[GpsRecord]:
     stmt = (
         select(GpsRecord)
@@ -81,6 +107,7 @@ def get_history(db: Session, device_id: str, start: datetime, end: datetime) -> 
 def get_device_status(db: Session, device_id: str) -> dict:
     device = db.scalar(select(DeviceInfo).where(DeviceInfo.device_id == device_id))
     latest = get_latest(db, device_id)
+    movement = get_movement_status(db, device_id)
 
     if not device:
         return {
@@ -109,6 +136,7 @@ def get_device_status(db: Session, device_id: str) -> dict:
                 "utc_time": latest.utc_time.isoformat() + "Z",
                 "speed": latest.speed,
                 "satellites": latest.satellites,
+                **movement,
             }
             if latest
             else None

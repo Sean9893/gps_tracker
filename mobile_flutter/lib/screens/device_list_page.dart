@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../widgets/wheelchair_icon.dart';
 import 'device_detail_page.dart';
 
 class DeviceListPage extends StatefulWidget {
@@ -57,9 +58,9 @@ class _DeviceListPageState extends State<DeviceListPage> {
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('车辆定位', style: TextStyle(fontWeight: FontWeight.w700)),
+            Text('轮椅定位', style: TextStyle(fontWeight: FontWeight.w700)),
             Text(
-              '设备状态与远程控制',
+              '轮椅状态与远程控制',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
             ),
           ],
@@ -96,18 +97,14 @@ class _DeviceListPageState extends State<DeviceListPage> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(
-                              Icons.directions_car_filled,
-                              size: 34,
-                              color: Colors.white,
-                            ),
+                            const WheelchairIcon(size: 42, padding: 3),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${devices.length} 台设备',
+                                    '${devices.length} 台轮椅',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 21,
@@ -139,8 +136,8 @@ class _DeviceListPageState extends State<DeviceListPage> {
                       if (devices.isEmpty)
                         _EmptyState(
                           icon: Icons.location_off_outlined,
-                          title: '还没有设备',
-                          subtitle: '设备首次上传定位后会显示在这里。',
+                          title: '还没有轮椅设备',
+                          subtitle: '轮椅首次上传定位后会显示在这里。',
                           buttonText: '刷新',
                           onPressed: _load,
                         )
@@ -176,11 +173,9 @@ class _DeviceListPageState extends State<DeviceListPage> {
                                           borderRadius:
                                               BorderRadius.circular(8),
                                         ),
-                                        child: Icon(
-                                          Icons.directions_car_filled,
-                                          color: device.online
-                                              ? const Color(0xFF176B5B)
-                                              : Colors.grey,
+                                        child: const WheelchairIcon(
+                                          size: 46,
+                                          padding: 3,
                                         ),
                                       ),
                                       const SizedBox(width: 12),

@@ -8,7 +8,9 @@ import paho.mqtt.client as mqtt
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.schemas.gps import GpsUploadReq
+from app.schemas.health import HealthUploadReq
 from app.services.gps_service import upsert_gps_record
+from app.services.health_service import upsert_health_record
 
 logger = logging.getLogger("mqtt")
 
@@ -44,10 +46,11 @@ class MqttConsumer:
         self._client = client
         self._started = True
         logger.info(
-            "MQTT consumer started. host=%s port=%s topic=%s",
+            "MQTT consumer started. host=%s port=%s topics=%s,%s",
             settings.mqtt_host,
             settings.mqtt_port,
             settings.mqtt_topic,
+            settings.mqtt_health_topic,
         )
 
     def stop(self) -> None:
@@ -64,7 +67,13 @@ class MqttConsumer:
             logger.error("MQTT connect failed, rc=%s", rc)
             return
         client.subscribe(settings.mqtt_topic, qos=settings.mqtt_qos)
-        logger.info("MQTT subscribed to topic=%s qos=%s", settings.mqtt_topic, settings.mqtt_qos)
+        client.subscribe(settings.mqtt_health_topic, qos=settings.mqtt_qos)
+        logger.info(
+            "MQTT subscribed to topics=%s,%s qos=%s",
+            settings.mqtt_topic,
+            settings.mqtt_health_topic,
+            settings.mqtt_qos,
+        )
 
     def _on_disconnect(self, _client: mqtt.Client, _userdata: Any, rc: int) -> None:
         if rc != 0:
@@ -75,20 +84,34 @@ class MqttConsumer:
         if payload is None:
             return
         try:
-            data = json.loads(payload)
-            req = GpsUploadReq.model_validate(data)
+            kind, req = self._parse_message(msg.topic, payload)
         except Exception as exc:
             logger.warning("MQTT payload invalid, topic=%s error=%s", msg.topic, exc)
             return
 
         db = SessionLocal()
         try:
-            upsert_gps_record(db, req)
+            if kind == "gps":
+                upsert_gps_record(db, req)
+            else:
+                upsert_health_record(db, req)
         except Exception as exc:
             db.rollback()
             logger.exception("MQTT upload failed: %s", exc)
         finally:
             db.close()
+
+    @staticmethod
+    def _parse_message(
+        topic: str,
+        payload: str,
+    ) -> tuple[str, GpsUploadReq | HealthUploadReq]:
+        data = json.loads(payload)
+        if topic == settings.mqtt_topic:
+            return "gps", GpsUploadReq.model_validate(data)
+        if topic == settings.mqtt_health_topic:
+            return "health", HealthUploadReq.model_validate(data)
+        raise ValueError(f"unsupported MQTT topic: {topic}")
 
     @staticmethod
     def _decode_payload(payload: bytes) -> str | None:

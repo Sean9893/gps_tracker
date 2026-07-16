@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../widgets/wheelchair_icon.dart';
 import 'geofence_page.dart';
 import 'history_page.dart';
 import 'map_page.dart';
@@ -24,11 +27,24 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   GpsPoint? latest;
   DeviceStatus? status;
   GeofenceConfig? fence;
+  HealthData? health;
+  Timer? healthTimer;
+  bool healthRefreshInProgress = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    healthTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _refreshHealth(),
+    );
+  }
+
+  @override
+  void dispose() {
+    healthTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -48,10 +64,24 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
         status = results[1] as DeviceStatus;
         fence = results[2] as GeofenceConfig;
       });
+      unawaited(_refreshHealth());
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
       if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _refreshHealth() async {
+    if (healthRefreshInProgress) return;
+    healthRefreshInProgress = true;
+    try {
+      final nextHealth = await api.fetchLatestHealth(widget.deviceId);
+      if (mounted) setState(() => health = nextHealth);
+    } catch (_) {
+      if (mounted) setState(() => health = null);
+    } finally {
+      healthRefreshInProgress = false;
     }
   }
 
@@ -124,7 +154,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                         fenceColor: _fenceColor(),
                       ),
                       const SizedBox(height: 18),
-                      const _SectionTitle(title: '车辆状态'),
+                      const _SectionTitle(title: '轮椅状态'),
                       const SizedBox(height: 10),
                       if (latest == null)
                         const _Notice(
@@ -134,13 +164,16 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                       else
                         _LocationSummary(
                           latest: latest!,
+                          online: status?.online ?? false,
                           formattedTime: _formatTime(latest!.utcTime),
                         ),
+                      const SizedBox(height: 14),
+                      HealthSummaryCard(health: health),
                       const SizedBox(height: 22),
                       const _SectionTitle(title: '方向控制'),
                       const SizedBox(height: 6),
                       const Text(
-                        '点击方向键向车辆发送一次控制指令',
+                        '点击方向键向轮椅发送一次控制指令',
                         style: TextStyle(color: Colors.black54, fontSize: 13),
                       ),
                       const SizedBox(height: 14),
@@ -213,6 +246,39 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   }
 }
 
+class HealthSummaryCard extends StatelessWidget {
+  final HealthData? health;
+
+  const HealthSummaryCard({super.key, required this.health});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Expanded(
+              child: _Metric(
+                icon: Icons.favorite_outline,
+                value: health?.heartRateText ?? '——',
+                label: '心率',
+              ),
+            ),
+            Expanded(
+              child: _Metric(
+                icon: Icons.water_drop_outlined,
+                value: health?.spo2Text ?? '——',
+                label: '血氧',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StatusHeader extends StatelessWidget {
   final bool online;
   final String deviceId;
@@ -236,26 +302,14 @@ class _StatusHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.directions_car_filled,
-              color: Colors.white,
-              size: 30,
-            ),
-          ),
+          const WheelchairIcon(size: 52, padding: 3),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  online ? '车辆在线' : '车辆离线',
+                  online ? '轮椅在线' : '轮椅离线',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -292,10 +346,12 @@ class _StatusHeader extends StatelessWidget {
 
 class _LocationSummary extends StatelessWidget {
   final GpsPoint latest;
+  final bool online;
   final String formattedTime;
 
   const _LocationSummary({
     required this.latest,
+    required this.online,
     required this.formattedTime,
   });
 
@@ -310,15 +366,18 @@ class _LocationSummary extends StatelessWidget {
               children: [
                 Expanded(
                   child: _Metric(
-                    icon: Icons.speed,
-                    value: '${latest.speed.toStringAsFixed(1)} km/h',
-                    label: '当前速度',
+                    icon: latest.moving
+                        ? Icons.motion_photos_on_outlined
+                        : Icons.pause_circle_outline,
+                    value: latest.moving ? '运动' : '静止',
+                    label:
+                        '位移 ${latest.movementDistanceM.toStringAsFixed(1)} 米',
                   ),
                 ),
                 Expanded(
                   child: _Metric(
                     icon: Icons.satellite_alt_outlined,
-                    value: '${latest.satellites}',
+                    value: '${online ? 8 : 0}',
                     label: '卫星数量',
                   ),
                 ),
@@ -443,9 +502,8 @@ class _DirectionPad extends StatelessWidget {
                         padding: EdgeInsets.all(20),
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(
-                        Icons.directions_car_filled,
-                        color: Color(0xFF176B5B),
+                    : const Center(
+                        child: WheelchairIcon(size: 54, padding: 2),
                       ),
               ),
               const SizedBox(width: 8),

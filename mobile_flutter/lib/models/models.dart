@@ -30,6 +30,8 @@ class GpsPoint {
   final double course;
   final int satellites;
   final int fix;
+  final bool moving;
+  final double movementDistanceM;
 
   GpsPoint({
     required this.deviceId,
@@ -40,6 +42,8 @@ class GpsPoint {
     required this.course,
     required this.satellites,
     required this.fix,
+    required this.moving,
+    required this.movementDistanceM,
   });
 
   factory GpsPoint.fromJson(Map<String, dynamic> json) {
@@ -52,6 +56,8 @@ class GpsPoint {
       course: (json['course'] as num).toDouble(),
       satellites: json['satellites'] ?? 0,
       fix: json['fix'] ?? 0,
+      moving: json['moving'] ?? false,
+      movementDistanceM: (json['movement_distance_m'] as num?)?.toDouble() ?? 0,
     );
   }
 }
@@ -80,6 +86,32 @@ class DeviceStatus {
       lastLocation: json['last_location'],
     );
   }
+}
+
+class HealthData {
+  final String deviceId;
+  final int heartRate;
+  final int spo2;
+  final DateTime uploadTime;
+
+  HealthData({
+    required this.deviceId,
+    required this.heartRate,
+    required this.spo2,
+    required this.uploadTime,
+  });
+
+  factory HealthData.fromJson(Map<String, dynamic> json) {
+    return HealthData(
+      deviceId: json['device_id'] ?? '',
+      heartRate: json['heart_rate'] as int,
+      spo2: json['spo2'] as int,
+      uploadTime: DateTime.parse(json['upload_time']),
+    );
+  }
+
+  String get heartRateText => heartRate > 200 ? '——' : '$heartRate 次/分';
+  String get spo2Text => '$spo2%';
 }
 
 class GeofenceConfig {
