@@ -110,8 +110,12 @@ class HealthData {
     );
   }
 
-  String get heartRateText => heartRate > 200 ? '——' : '$heartRate 次/分';
-  String get spo2Text => '$spo2%';
+  String get heartRateText {
+    if (heartRate == -999 || heartRate > 200) return '-';
+    return '$heartRate 次/分';
+  }
+
+  String get spo2Text => spo2 == -999 ? '-' : '$spo2%';
 }
 
 class GeofenceConfig {

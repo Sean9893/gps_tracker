@@ -21,6 +21,8 @@ class HealthServiceTest(unittest.TestCase):
     def test_accepts_boundary_values(self):
         HealthUploadReq(device_id="gps_001", heart_rate=0, spo2=0)
         HealthUploadReq(device_id="gps_001", heart_rate=999, spo2=100)
+        HealthUploadReq(device_id="gps_001", heart_rate=-999, spo2=98)
+        HealthUploadReq(device_id="gps_001", heart_rate=86, spo2=-999)
 
     def test_rejects_values_outside_ranges(self):
         invalid_payloads = (

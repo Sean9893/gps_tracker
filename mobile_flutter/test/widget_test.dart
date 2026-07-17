@@ -30,7 +30,7 @@ void main() {
     );
 
     expect(find.text('心率'), findsOneWidget);
-    expect(find.text('——'), findsOneWidget);
+    expect(find.text('-'), findsOneWidget);
     expect(find.text('血氧'), findsOneWidget);
     expect(find.text('98%'), findsOneWidget);
   });
