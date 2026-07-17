@@ -36,7 +36,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
     super.initState();
     _load();
     healthTimer = Timer.periodic(
-      const Duration(seconds: 10),
+      const Duration(seconds: 2),
       (_) => _refreshHealth(),
     );
   }

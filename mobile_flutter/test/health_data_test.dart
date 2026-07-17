@@ -37,4 +37,16 @@ void main() {
     expect(health.heartRateText, '-');
     expect(health.spo2Text, '-');
   });
+
+  test('zero health values display dash', () {
+    final health = HealthData.fromJson({
+      'device_id': 'gps_001',
+      'heart_rate': 0,
+      'spo2': 0,
+      'upload_time': '2026-07-16T08:00:00Z',
+    });
+
+    expect(health.heartRateText, '-');
+    expect(health.spo2Text, '-');
+  });
 }
