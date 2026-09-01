@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../app_config.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../widgets/dashboard_tile.dart';
+import '../widgets/speed_gauge.dart';
 import '../widgets/wheelchair_icon.dart';
 import 'geofence_page.dart';
 import 'history_page.dart';
@@ -107,6 +111,23 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
     return DateFormat('yyyy年MM月dd日 HH:mm:ss').format(value.toLocal());
   }
 
+  Future<void> _callEmergencyNumber() async {
+    final uri = Uri(scheme: 'tel', path: AppConfig.emergencyPhoneNumber);
+    try {
+      final ok = await launchUrl(uri);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法拨打电话')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('拨打电话失败：$e')),
+      );
+    }
+  }
+
   String _fenceText() {
     if (!(fence?.configured ?? false)) return '未设置';
     if (!(fence?.enabled ?? false)) return '已停用';
@@ -147,6 +168,72 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                     children: [
+                      const _BrandBanner(),
+                      const SizedBox(height: 16),
+                      _SpeedCard(
+                        speedKmh: latest?.speed ?? 0,
+                        moving: latest?.moving ?? false,
+                      ),
+                      const SizedBox(height: 16),
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 1.35,
+                        children: [
+                          DashboardTile(
+                            icon: Icons.phone_in_talk_outlined,
+                            label: '一键呼叫',
+                            onPressed: _callEmergencyNumber,
+                          ),
+                          DashboardTile(
+                            icon: Icons.location_on_outlined,
+                            label: 'GPS定位',
+                            onPressed: latest == null
+                                ? null
+                                : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => MapPage(
+                                          deviceId: widget.deviceId,
+                                        ),
+                                      ),
+                                    ),
+                          ),
+                          DashboardTile(
+                            icon: Icons.shield_outlined,
+                            label: '电子围栏',
+                            alert: fence?.inside == false &&
+                                fence?.enabled == true,
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => GeofencePage(
+                                    deviceId: widget.deviceId,
+                                  ),
+                                ),
+                              );
+                              _load();
+                            },
+                          ),
+                          DashboardTile(
+                            icon: Icons.route_outlined,
+                            label: '查询轨迹',
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => HistoryPage(
+                                  deviceId: widget.deviceId,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
                       _StatusHeader(
                         online: status?.online ?? false,
                         deviceId: widget.deviceId,
@@ -181,67 +268,114 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                         disabled: sendingCommand,
                         onCommand: _sendCommand,
                       ),
-                      const SizedBox(height: 24),
-                      const _SectionTitle(title: '功能'),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _FeatureButton(
-                              icon: Icons.map_outlined,
-                              label: '实时地图',
-                              onPressed: latest == null
-                                  ? null
-                                  : () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => MapPage(
-                                            deviceId: widget.deviceId,
-                                          ),
-                                        ),
-                                      ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _FeatureButton(
-                              icon: Icons.route_outlined,
-                              label: '历史轨迹',
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => HistoryPage(
-                                    deviceId: widget.deviceId,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _FeatureButton(
-                              icon: Icons.shield_outlined,
-                              label: '电子围栏',
-                              alert: fence?.inside == false &&
-                                  fence?.enabled == true,
-                              onPressed: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => GeofencePage(
-                                      deviceId: widget.deviceId,
-                                    ),
-                                  ),
-                                );
-                                _load();
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
+    );
+  }
+}
+
+class _BrandBanner extends StatelessWidget {
+  const _BrandBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1F8E77), Color(0xFF176B5B)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: Image.asset(
+              'assets/images/logo_brand.png',
+              height: 44,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            '始于1996年，30年大品牌！',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeedCard extends StatelessWidget {
+  final double speedKmh;
+  final bool moving;
+
+  const _SpeedCard({required this.speedKmh, required this.moving});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1F8E77), Color(0xFF66B29B)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+const Row(
+                  children: [
+                    Icon(Icons.circle_outlined,
+                        color: Colors.white70, size: 16),
+                    SizedBox(width: 6),
+                    Text('电量', style: TextStyle(color: Colors.white70)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  '100%',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Icon(Icons.remove, color: Colors.white70, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      moving ? '运动' : '停止',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          SpeedGauge(speedKmh: speedKmh, moving: moving),
+        ],
+      ),
     );
   }
 }
@@ -512,41 +646,6 @@ class _DirectionPad extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _button(Icons.keyboard_arrow_down, '后退', 'backward'),
-        ],
-      ),
-    );
-  }
-}
-
-class _FeatureButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-  final bool alert;
-
-  const _FeatureButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.alert = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = alert ? const Color(0xFFC43D3D) : const Color(0xFF176B5B);
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(74),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-        side: BorderSide(color: color.withValues(alpha: 0.35)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(height: 5),
-          Text(label, style: TextStyle(color: color, fontSize: 13)),
         ],
       ),
     );
