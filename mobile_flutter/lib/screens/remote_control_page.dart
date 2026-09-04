@@ -78,86 +78,38 @@ class _RemoteControlPageState extends State<RemoteControlPage> {
       ),
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.accessible,
-                  size: 80,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.accessible,
+                size: 80,
+                color: Color(0xFF176B5B),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '设备 ${widget.deviceId}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF176B5B),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  '设备 ${widget.deviceId}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF176B5B),
-                  ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '拖动摇杆控制轮椅方向',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black54,
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  '拖动摇杆控制轮椅方向',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                JoystickPad(
-                  size: 220,
-                  onChanged: _onJoystickChanged,
-                  onReleased: _onJoystickReleased,
-                ),
-                const SizedBox(height: 40),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F9F7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFD5E5DF)),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            size: 18,
-                            color: Color(0xFF176B5B),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            '操作说明',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF176B5B),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        '• 向上推动：前进\n'
-                        '• 向下推动：后退\n'
-                        '• 向左推动：左转\n'
-                        '• 向右推动：右转\n'
-                        '• 松开摇杆：停止',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.black87,
-                          height: 1.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 40),
+              JoystickPad(
+                size: 220,
+                onChanged: _onJoystickChanged,
+                onReleased: _onJoystickReleased,
+              ),
+            ],
           ),
         ),
       ),
