@@ -1,15 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_config.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../widgets/dashboard_tile.dart';
+import '../widgets/joystick_pad.dart';
 import '../widgets/speed_gauge.dart';
-import '../widgets/wheelchair_icon.dart';
 import 'geofence_page.dart';
 import 'history_page.dart';
 import 'map_page.dart';
@@ -26,7 +25,6 @@ class DeviceDetailPage extends StatefulWidget {
 class _DeviceDetailPageState extends State<DeviceDetailPage> {
   final api = ApiService();
   bool loading = true;
-  bool sendingCommand = false;
   String? error;
   GpsPoint? latest;
   DeviceStatus? status;
@@ -34,6 +32,12 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   HealthData? health;
   Timer? healthTimer;
   bool healthRefreshInProgress = false;
+
+  Timer? _joystickThrottleTimer;
+  bool _joystickDragging = false;
+  bool _joystickSending = false;
+  int _joystickX = kJoystickCenter;
+  int _joystickY = kJoystickCenter;
 
   @override
   void initState() {
@@ -48,6 +52,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   @override
   void dispose() {
     healthTimer?.cancel();
+    _joystickThrottleTimer?.cancel();
     super.dispose();
   }
 
@@ -89,26 +94,43 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
     }
   }
 
-  Future<void> _sendCommand(String command, String label) async {
-    setState(() => sendingCommand = true);
-    try {
-      await api.sendCommand(deviceId: widget.deviceId, command: command);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已发送：$label')),
+  // 摇杆拖动中持续回调：记录最新坐标，并在拖动开始时启动节流定时器，
+  // 每隔 150ms 发送一次最新的摇杆坐标，避免请求过于频繁。
+  void _onJoystickChanged(int x, int y) {
+    _joystickX = x;
+    _joystickY = y;
+    if (!_joystickDragging) {
+      _joystickDragging = true;
+      unawaited(_sendJoystickNow());
+      _joystickThrottleTimer = Timer.periodic(
+        const Duration(milliseconds: 150),
+        (_) => _sendJoystickNow(),
       );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('指令发送失败：$e')),
-      );
-    } finally {
-      if (mounted) setState(() => sendingCommand = false);
     }
   }
 
-  String _formatTime(DateTime value) {
-    return DateFormat('yyyy年MM月dd日 HH:mm:ss').format(value.toLocal());
+  // 松手回中：停止节流定时器，并发送一次居中坐标，确保小车停止。
+  void _onJoystickReleased() {
+    _joystickThrottleTimer?.cancel();
+    _joystickThrottleTimer = null;
+    _joystickDragging = false;
+    _joystickX = kJoystickCenter;
+    _joystickY = kJoystickCenter;
+    unawaited(_sendJoystickNow());
+  }
+
+  Future<void> _sendJoystickNow() async {
+    if (_joystickSending) return;
+    _joystickSending = true;
+    final x = _joystickX;
+    final y = _joystickY;
+    try {
+      await api.sendJoystick(deviceId: widget.deviceId, x: x, y: y);
+    } catch (_) {
+      // 摇杆连续发送期间静默失败，避免刷屏提示；网络异常会在下次操作时体现。
+    } finally {
+      _joystickSending = false;
+    }
   }
 
   Future<void> _callEmergencyNumber() async {
@@ -128,60 +150,30 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
     }
   }
 
-  String _fenceText() {
-    if (!(fence?.configured ?? false)) return '未设置';
-    if (!(fence?.enabled ?? false)) return '已停用';
-    if (fence?.inside == true) return '围栏内';
-    if (fence?.inside == false) return '围栏外';
-    return '等待定位';
-  }
-
-  Color _fenceColor() {
-    if (fence?.inside == false && fence?.enabled == true) {
-      return const Color(0xFFC43D3D);
-    }
-    if (fence?.inside == true && fence?.enabled == true) {
-      return const Color(0xFF18794E);
-    }
-    return const Color(0xFF6D7472);
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.deviceId),
-        actions: [
-          IconButton(
-            tooltip: '刷新',
-            onPressed: loading ? null : _load,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : error != null
-              ? _ErrorView(message: error!, onRetry: _load)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                    children: [
-                      const _BrandBanner(),
+      body: SafeArea(
+        child: loading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null
+                ? _ErrorView(message: error!, onRetry: _load)
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                      children: [
+                        _SpeedCard(
+                          speedKmh: latest?.speed ?? 0,
+                          moving: latest?.moving ?? false,
+                          battery: latest?.battery ?? 0,
+                          online: status?.online ?? false,
+                          onBack: () => Navigator.pop(context),
+                          onRefresh: loading ? null : _load,
+                        ),
                       const SizedBox(height: 16),
-                      _SpeedCard(
-                        speedKmh: latest?.speed ?? 0,
-                        moving: latest?.moving ?? false,
-                      ),
-                      const SizedBox(height: 16),
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 1.35,
+                      _DashboardGrid(
                         children: [
                           DashboardTile(
                             icon: Icons.phone_in_talk_outlined,
@@ -221,7 +213,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                           ),
                           DashboardTile(
                             icon: Icons.route_outlined,
-                            label: '查询轨迹',
+                            label: '行驶轨迹',
                             onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -231,86 +223,31 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                               ),
                             ),
                           ),
+                          DashboardTile(
+                            icon: Icons.warning_outlined,
+                            label: '防摔报警',
+                            alert: status?.fallDetected ?? false,
+                            onPressed: null,
+                          ),
+                          DashboardTile(
+                            icon: Icons.favorite_outline,
+                            label: '健康',
+                            subtitle: health == null
+                                ? '加载中...'
+                                : '${health!.heartRateText} | ${health!.spo2Text}',
+                            onPressed: null,
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 22),
-                      _StatusHeader(
-                        online: status?.online ?? false,
-                        deviceId: widget.deviceId,
-                        fenceText: _fenceText(),
-                        fenceColor: _fenceColor(),
-                      ),
-                      const SizedBox(height: 18),
-                      const _SectionTitle(title: '轮椅状态'),
-                      const SizedBox(height: 10),
-                      if (latest == null)
-                        const _Notice(
-                          icon: Icons.location_off_outlined,
-                          text: '暂时没有定位数据，控制功能仍可使用。',
-                        )
-                      else
-                        _LocationSummary(
-                          latest: latest!,
-                          online: status?.online ?? false,
-                          formattedTime: _formatTime(latest!.utcTime),
-                        ),
-                      const SizedBox(height: 14),
-                      HealthSummaryCard(health: health),
-                      const SizedBox(height: 22),
-                      const _SectionTitle(title: '方向控制'),
-                      const SizedBox(height: 6),
-                      const Text(
-                        '点击方向键向轮椅发送一次控制指令',
-                        style: TextStyle(color: Colors.black54, fontSize: 13),
-                      ),
-                      const SizedBox(height: 14),
-                      _DirectionPad(
-                        disabled: sendingCommand,
-                        onCommand: _sendCommand,
+                      const SizedBox(height: 20),
+                      _DirectionControlPanel(
+                        disabled: loading,
+                        onJoystickChanged: _onJoystickChanged,
+                        onJoystickReleased: _onJoystickReleased,
                       ),
                     ],
                   ),
                 ),
-    );
-  }
-}
-
-class _BrandBanner extends StatelessWidget {
-  const _BrandBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1F8E77), Color(0xFF176B5B)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: Image.asset(
-              'assets/images/logo_brand.png',
-              height: 44,
-              fit: BoxFit.contain,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            '始于1996年，30年大品牌！',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -319,156 +256,231 @@ class _BrandBanner extends StatelessWidget {
 class _SpeedCard extends StatelessWidget {
   final double speedKmh;
   final bool moving;
+  final int battery;
+  final bool online;
+  final VoidCallback onBack;
+  final VoidCallback? onRefresh;
 
-  const _SpeedCard({required this.speedKmh, required this.moving});
+  const _SpeedCard({
+    required this.speedKmh,
+    required this.moving,
+    required this.battery,
+    required this.online,
+    required this.onBack,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
+    const gaugeSize = 108.0;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF1F8E77), Color(0xFF66B29B)],
+          colors: [Color(0xFF4FA890), Color(0xFF7DCCB8), Color(0xFFE8F5F1)],
+          stops: [0.0, 0.5, 1.0],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Stack(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-const Row(
-                  children: [
-                    Icon(Icons.circle_outlined,
-                        color: Colors.white70, size: 16),
-                    SizedBox(width: 6),
-                    Text('电量', style: TextStyle(color: Colors.white70)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  '100%',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    const Icon(Icons.remove, color: Colors.white70, size: 16),
-                    const SizedBox(width: 6),
-                    Text(
-                      moving ? '运动' : '停止',
-                      style: const TextStyle(color: Colors.white70),
+          Column(
+            children: [
+              const SizedBox(height: 30),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 品牌名称和在线状态
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF176B5B),
+                                borderRadius: BorderRadius.circular(999),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF176B5B)
+                                        .withValues(alpha: 0.25),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: const Text(
+                                '耐心 Nysin',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: online
+                                      ? const Color(0xFF4CAF50)
+                                      : const Color(0xFF9E9E9E),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: Colors.white, width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (online
+                                              ? const Color(0xFF4CAF50)
+                                              : const Color(0xFF9E9E9E))
+                                          .withValues(alpha: 0.5),
+                                      blurRadius: 2,
+                                      spreadRadius: 0.5,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: const Center(
+                                child: Icon(Icons.remove,
+                                    color: Colors.white70, size: 9),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              moving ? '运动' : '停止',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                  SpeedGauge(
+                    speedKmh: speedKmh,
+                    moving: moving,
+                    size: gaugeSize,
+                  ),
+                ],
+              ),
+              const Row(
+                children: [
+                  Expanded(child: SizedBox()),
+                  SizedBox(
+                    width: gaugeSize,
+                    child: Text(
+                      'km/h',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF176B5B),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.battery_charging_full,
+                      color: Color(0xFF176B5B), size: 17),
+                  const SizedBox(width: 5),
+                  Text(
+                    '电量 $battery%',
+                    style: const TextStyle(
+                      color: Color(0xFF176B5B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: battery / 100.0,
+                        minHeight: 6,
+                        backgroundColor: Colors.white.withValues(alpha: 0.5),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF176B5B),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          SpeedGauge(speedKmh: speedKmh, moving: moving),
-        ],
-      ),
-    );
-  }
-}
-
-class HealthSummaryCard extends StatelessWidget {
-  final HealthData? health;
-
-  const HealthSummaryCard({super.key, required this.health});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Expanded(
-              child: _Metric(
-                icon: Icons.favorite_outline,
-                value: health?.heartRateText ?? '——',
-                label: '心率',
-              ),
-            ),
-            Expanded(
-              child: _Metric(
-                icon: Icons.water_drop_outlined,
-                value: health?.spo2Text ?? '——',
-                label: '血氧',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusHeader extends StatelessWidget {
-  final bool online;
-  final String deviceId;
-  final String fenceText;
-  final Color fenceColor;
-
-  const _StatusHeader({
-    required this.online,
-    required this.deviceId,
-    required this.fenceText,
-    required this.fenceColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: online ? const Color(0xFF176B5B) : const Color(0xFF626967),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          const WheelchairIcon(size: 52, padding: 3),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  online ? '轮椅在线' : '轮椅离线',
-                  style: const TextStyle(
+          // 左上角返回按钮
+          Positioned(
+            top: 0,
+            left: 0,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onBack,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  child: const Icon(
+                    Icons.arrow_back,
                     color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                    size: 22,
                   ),
                 ),
-                Text(
-                  '设备编号 $deviceId',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
+              ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              fenceText,
-              style: TextStyle(
-                color: fenceColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+          // 右上角刷新按钮
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onRefresh,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.refresh,
+                    color: onRefresh == null ? Colors.white38 : Colors.white,
+                    size: 22,
+                  ),
+                ),
               ),
             ),
           ),
@@ -478,213 +490,100 @@ class _StatusHeader extends StatelessWidget {
   }
 }
 
-class _LocationSummary extends StatelessWidget {
-  final GpsPoint latest;
-  final bool online;
-  final String formattedTime;
+class _DashboardGrid extends StatelessWidget {
+  final List<Widget> children;
 
-  const _LocationSummary({
-    required this.latest,
-    required this.online,
-    required this.formattedTime,
-  });
+  const _DashboardGrid({required this.children});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _Metric(
-                    icon: latest.moving
-                        ? Icons.motion_photos_on_outlined
-                        : Icons.pause_circle_outline,
-                    value: latest.moving ? '运动' : '静止',
-                    label:
-                        '位移 ${latest.movementDistanceM.toStringAsFixed(1)} 米',
-                  ),
-                ),
-                Expanded(
-                  child: _Metric(
-                    icon: Icons.satellite_alt_outlined,
-                    value: '${online ? 8 : 0}',
-                    label: '卫星数量',
-                  ),
-                ),
-                Expanded(
-                  child: _Metric(
-                    icon: latest.fix == 1
-                        ? Icons.gps_fixed
-                        : Icons.gps_off_outlined,
-                    value: latest.fix == 1 ? '有效' : '无效',
-                    label: '定位状态',
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, color: Colors.black54),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${latest.lat.toStringAsFixed(6)}, ${latest.lng.toStringAsFixed(6)}',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.schedule, color: Colors.black54),
-                const SizedBox(width: 8),
-                Text(formattedTime),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _Metric({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
+    return Stack(
       children: [
-        Icon(icon, color: const Color(0xFF176B5B)),
-        const SizedBox(height: 5),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.black54, fontSize: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.35,
+          children: children,
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: const Color(0xFF176B5B),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF176B5B).withValues(alpha: 0.25),
+                    blurRadius: 4,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-class _DirectionPad extends StatelessWidget {
+class _DirectionControlPanel extends StatelessWidget {
   final bool disabled;
-  final Future<void> Function(String command, String label) onCommand;
+  final void Function(int x, int y) onJoystickChanged;
+  final VoidCallback onJoystickReleased;
 
-  const _DirectionPad({
+  const _DirectionControlPanel({
     required this.disabled,
-    required this.onCommand,
+    required this.onJoystickChanged,
+    required this.onJoystickReleased,
   });
-
-  Widget _button(IconData icon, String label, String command) {
-    return SizedBox(
-      width: 78,
-      height: 64,
-      child: FilledButton(
-        onPressed: disabled ? null : () => onCommand(command, label),
-        style: FilledButton.styleFrom(
-          padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 28),
-            Text(label, style: const TextStyle(fontSize: 12)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        children: [
-          _button(Icons.keyboard_arrow_up, '前进', 'forward'),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _button(Icons.keyboard_arrow_left, '左转', 'left'),
-              const SizedBox(width: 8),
-              Container(
-                width: 62,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE6EAE8),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: disabled
-                    ? const Padding(
-                        padding: EdgeInsets.all(20),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Center(
-                        child: WheelchairIcon(size: 54, padding: 2),
-                      ),
-              ),
-              const SizedBox(width: 8),
-              _button(Icons.keyboard_arrow_right, '右转', 'right'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _button(Icons.keyboard_arrow_down, '后退', 'backward'),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String title;
-
-  const _SectionTitle({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-    );
-  }
-}
-
-class _Notice extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _Notice({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4D6),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE1E7E4)),
       ),
-      child: Row(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: const Color(0xFF8A5A00)),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text)),
+          const Text(
+            '方向控制',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF176B5B),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '拖动摇杆控制轮椅方向，松手自动回中并停止',
+            style: TextStyle(
+              color: Colors.black.withValues(alpha: 0.5),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: JoystickPad(
+              size: 180,
+              disabled: disabled,
+              onChanged: onJoystickChanged,
+              onReleased: onJoystickReleased,
+            ),
+          ),
         ],
       ),
     );

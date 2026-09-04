@@ -44,6 +44,7 @@ def latest(device_id: str = Query(...), db: Session = Depends(get_db)):
             "course": rec.course,
             "satellites": rec.satellites,
             "fix": rec.fix,
+            "battery": rec.battery,
             "upload_time": rec.upload_time.isoformat() + "Z",
             **movement,
         }

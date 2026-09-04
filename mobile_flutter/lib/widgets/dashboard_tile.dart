@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 class DashboardTile extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? subtitle;
   final VoidCallback? onPressed;
   final bool alert;
 
@@ -13,61 +14,79 @@ class DashboardTile extends StatelessWidget {
     super.key,
     required this.icon,
     required this.label,
+    this.subtitle,
     required this.onPressed,
     this.alert = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final badgeColor =
-        alert ? const Color(0xFFC43D3D) : const Color(0xFF176B5B);
+    final iconBgColor = alert
+        ? const Color(0xFFF4D4D4)
+        : const Color(0xFFB8E6D5);
+    final iconColor = alert
+        ? const Color(0xFFC43D3D)
+        : const Color(0xFF176B5B);
+    final labelBgColor = alert
+        ? const Color(0xFFC43D3D)
+        : const Color(0xFF176B5B);
+    final bool interactive = onPressed != null;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: onPressed,
         child: Opacity(
-          opacity: onPressed == null ? 0.5 : 1,
+          opacity: !interactive && subtitle == null ? 0.5 : 1,
           child: Container(
             height: 132,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: const Color(0xFFEFF3F1),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFFE1E7E4)),
             ),
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: CustomPaint(painter: _MapTexturePainter()),
+                  child: Image.asset(
+                    'assets/images/map_texture_bg.png',
+                    fit: BoxFit.cover,
+                  ),
                 ),
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 46,
-                      height: 46,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
-                        color: badgeColor,
+                        color: iconBgColor,
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: badgeColor.withValues(alpha: 0.35),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
                       ),
-                      child: Icon(icon, color: Colors.white, size: 24),
+                      child: Icon(icon, color: iconColor, size: 26),
                     ),
-                    const SizedBox(height: 10),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFF176B5B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 5,
+                        horizontal: 16,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: badgeColor,
+                        color: labelBgColor,
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -90,34 +109,3 @@ class DashboardTile extends StatelessWidget {
   }
 }
 
-/// Purely decorative grid of faint "streets" to evoke a map thumbnail,
-/// without pulling in real tile data.
-class _MapTexturePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = const Color(0xFFDCE5E1)
-      ..strokeWidth = 1.4;
-
-    const step = 26.0;
-    for (double x = -size.height; x < size.width + size.height; x += step) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x + size.height, size.height),
-        linePaint,
-      );
-    }
-
-    final blobPaint = Paint()..color = const Color(0xFFD8E9F2);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(-14, size.height * 0.55, size.width * 0.55, 26),
-        const Radius.circular(10),
-      ),
-      blobPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapTexturePainter oldDelegate) => false;
-}

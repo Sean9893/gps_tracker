@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -12,4 +12,5 @@ class DeviceInfo(Base):
     device_name: Mapped[str] = mapped_column(String(128), default="")
     status: Mapped[int] = mapped_column(Integer, default=0)
     last_online_time: Mapped[DateTime | None] = mapped_column(DateTime, nullable=True)
+    fall_detected: Mapped[bool] = mapped_column(Boolean, default=False)
     create_time: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())

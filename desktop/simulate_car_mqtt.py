@@ -18,6 +18,25 @@ COMMAND_ACTIONS = {
     "right": "TURN_RIGHT",
 }
 
+# Joystick axis range is 0-1023 with 512 as the resting/center value.
+JOYSTICK_CENTER = 512
+JOYSTICK_DEADZONE = 100
+
+
+def classify_joystick(x: int, y: int) -> str:
+    """Roughly classify a joystick position into a simulated action.
+
+    dx/dy are the offsets from the center (512, 512). Pushing up increases
+    y toward 1023, pushing right increases x toward 1023.
+    """
+    dx = x - JOYSTICK_CENTER
+    dy = y - JOYSTICK_CENTER
+    if abs(dx) < JOYSTICK_DEADZONE and abs(dy) < JOYSTICK_DEADZONE:
+        return "STOP"
+    if abs(dy) >= abs(dx):
+        return "FORWARD" if dy > 0 else "BACKWARD"
+    return "TURN_RIGHT" if dx > 0 else "TURN_LEFT"
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -168,12 +187,23 @@ def main() -> int:
             return
 
         device_id = str(data.get("device_id", ""))
-        command = str(data.get("command", ""))
-        action = COMMAND_ACTIONS.get(command)
-
         if device_id and device_id != args.device_id:
             print(f"Warning: payload device_id={device_id}, expected {args.device_id}", flush=True)
 
+        if "x" in data and "y" in data:
+            try:
+                x = int(data["x"])
+                y = int(data["y"])
+            except (TypeError, ValueError):
+                print(f"Invalid joystick payload: {data}", flush=True)
+                return
+            action = classify_joystick(x, y)
+            print(f"joystick: x={x}, y={y}", flush=True)
+            print(f"simulated_action: {action}", flush=True)
+            return
+
+        command = str(data.get("command", ""))
+        action = COMMAND_ACTIONS.get(command)
         if action is None:
             print(f"Unknown command: {command}", flush=True)
             return

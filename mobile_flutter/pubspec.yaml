@@ -27,3 +27,4 @@ flutter:
   assets:
     - assets/images/wheelchair.png
     - assets/images/logo_brand.png
+    - assets/images/map_texture_bg.png

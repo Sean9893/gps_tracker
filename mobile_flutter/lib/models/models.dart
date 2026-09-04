@@ -32,6 +32,7 @@ class GpsPoint {
   final int fix;
   final bool moving;
   final double movementDistanceM;
+  final int battery;
 
   GpsPoint({
     required this.deviceId,
@@ -44,6 +45,7 @@ class GpsPoint {
     required this.fix,
     required this.moving,
     required this.movementDistanceM,
+    required this.battery,
   });
 
   factory GpsPoint.fromJson(Map<String, dynamic> json) {
@@ -58,6 +60,7 @@ class GpsPoint {
       fix: json['fix'] ?? 0,
       moving: json['moving'] ?? false,
       movementDistanceM: (json['movement_distance_m'] as num?)?.toDouble() ?? 0,
+      battery: json['battery'] ?? 0,
     );
   }
 }
@@ -68,6 +71,7 @@ class DeviceStatus {
   final String? lastOnlineTime;
   final int? lastFix;
   final Map<String, dynamic>? lastLocation;
+  final bool fallDetected;
 
   DeviceStatus({
     required this.deviceId,
@@ -75,6 +79,7 @@ class DeviceStatus {
     required this.lastOnlineTime,
     required this.lastFix,
     required this.lastLocation,
+    required this.fallDetected,
   });
 
   factory DeviceStatus.fromJson(Map<String, dynamic> json) {
@@ -84,6 +89,7 @@ class DeviceStatus {
       lastOnlineTime: json['last_online_time'],
       lastFix: json['last_fix'],
       lastLocation: json['last_location'],
+      fallDetected: json['fall_detected'] ?? false,
     );
   }
 }

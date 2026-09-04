@@ -13,6 +13,8 @@ class GpsUploadReq(BaseModel):
     course: float = 0
     satellites: int = 0
     fix: int
+    battery: int = 0
+    fall_detected: bool = False
 
     @field_validator("lat")
     @classmethod

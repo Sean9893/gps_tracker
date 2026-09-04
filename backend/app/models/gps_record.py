@@ -16,5 +16,6 @@ class GpsRecord(Base):
     course: Mapped[float] = mapped_column(Float, default=0)
     satellites: Mapped[int] = mapped_column(Integer, default=0)
     fix: Mapped[int] = mapped_column(Integer, default=0)
+    battery: Mapped[int] = mapped_column(Integer, default=0)
     upload_time: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
 

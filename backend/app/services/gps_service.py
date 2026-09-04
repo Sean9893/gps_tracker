@@ -33,6 +33,7 @@ def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
         course=req.course,
         satellites=req.satellites,
         fix=req.fix,
+        battery=req.battery,
     )
     db.add(record)
 
@@ -43,11 +44,13 @@ def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
             device_name=req.device_id,
             status=1,
             last_online_time=now,
+            fall_detected=req.fall_detected,
         )
         db.add(device)
     else:
         device.status = 1
         device.last_online_time = now
+        device.fall_detected = req.fall_detected
 
     if req.fix == 1:
         evaluate_geofence(db, req.device_id, req.lat, req.lng, now)
@@ -116,6 +119,7 @@ def get_device_status(db: Session, device_id: str) -> dict:
             "last_online_time": None,
             "last_location": None,
             "last_fix": None,
+            "fall_detected": False,
         }
 
     online = False
@@ -142,6 +146,7 @@ def get_device_status(db: Session, device_id: str) -> dict:
             else None
         ),
         "last_fix": latest.fix if latest else None,
+        "fall_detected": device.fall_detected,
     }
 
 

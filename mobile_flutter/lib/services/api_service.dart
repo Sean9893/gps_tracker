@@ -81,6 +81,27 @@ class ApiService {
     }
   }
 
+  /// Sends a continuous joystick position. [x]/[y] are integers in
+  /// [0, 1023] with 512 as the resting/center value.
+  Future<void> sendJoystick({
+    required String deviceId,
+    required int x,
+    required int y,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/device/$deviceId/joystick');
+    final resp = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'x': x, 'y': y}),
+        )
+        .timeout(_timeout);
+    final body = _decode(resp);
+    if (body['code'] != 0) {
+      throw Exception(body['msg'] ?? 'send joystick failed');
+    }
+  }
+
   Future<GeofenceConfig> fetchGeofence(String deviceId) async {
     final encodedId = Uri.encodeComponent(deviceId);
     final uri = Uri.parse('$baseUrl/api/geofence/$encodedId');

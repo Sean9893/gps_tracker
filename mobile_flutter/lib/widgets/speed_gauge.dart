@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'wheelchair_icon.dart';
 
 /// A circular arc gauge showing current speed, with a wheelchair icon in the
-/// center and a moving/stopped status label underneath.
+/// center.
 class SpeedGauge extends StatelessWidget {
   final double speedKmh;
   final double maxSpeed;
@@ -34,40 +34,21 @@ class SpeedGauge extends StatelessWidget {
             painter: _GaugePainter(progress: progress),
           ),
           Container(
-            width: size * 0.58,
-            height: size * 0.58,
-            decoration: const BoxDecoration(
+            width: size * 0.62,
+            height: size * 0.62,
+            decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.4),
+                width: 3,
+              ),
             ),
             alignment: Alignment.center,
             child: WheelchairIcon(
-              size: size * 0.42,
+              size: size * 0.46,
               padding: 2,
               borderRadius: const BorderRadius.all(Radius.circular(999)),
-            ),
-          ),
-          Positioned(
-            bottom: size * 0.06,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  moving ? '运动' : '停止',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    fontSize: size * 0.075,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'km/h',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: size * 0.065,
-                  ),
-                ),
-              ],
             ),
           ),
         ],
