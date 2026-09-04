@@ -7,11 +7,11 @@ import '../app_config.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../widgets/dashboard_tile.dart';
-import '../widgets/joystick_pad.dart';
 import '../widgets/speed_gauge.dart';
 import 'geofence_page.dart';
 import 'history_page.dart';
 import 'map_page.dart';
+import 'remote_control_page.dart';
 
 class DeviceDetailPage extends StatefulWidget {
   final String deviceId;
@@ -34,12 +34,6 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   bool healthRefreshInProgress = false;
   bool statusRefreshInProgress = false;
 
-  Timer? _joystickThrottleTimer;
-  bool _joystickDragging = false;
-  bool _joystickSending = false;
-  int _joystickX = kJoystickCenter;
-  int _joystickY = kJoystickCenter;
-
   @override
   void initState() {
     super.initState();
@@ -58,7 +52,6 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   @override
   void dispose() {
     healthTimer?.cancel();
-    _joystickThrottleTimer?.cancel();
     super.dispose();
   }
 
@@ -113,45 +106,6 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
     }
   }
 
-  // 摇杆拖动中持续回调：记录最新坐标，并在拖动开始时启动节流定时器，
-  // 每隔 150ms 发送一次最新的摇杆坐标，避免请求过于频繁。
-  void _onJoystickChanged(int x, int y) {
-    _joystickX = x;
-    _joystickY = y;
-    if (!_joystickDragging) {
-      _joystickDragging = true;
-      unawaited(_sendJoystickNow());
-      _joystickThrottleTimer = Timer.periodic(
-        const Duration(milliseconds: 150),
-        (_) => _sendJoystickNow(),
-      );
-    }
-  }
-
-  // 松手回中：停止节流定时器，并发送一次居中坐标，确保小车停止。
-  void _onJoystickReleased() {
-    _joystickThrottleTimer?.cancel();
-    _joystickThrottleTimer = null;
-    _joystickDragging = false;
-    _joystickX = kJoystickCenter;
-    _joystickY = kJoystickCenter;
-    unawaited(_sendJoystickNow());
-  }
-
-  Future<void> _sendJoystickNow() async {
-    if (_joystickSending) return;
-    _joystickSending = true;
-    final x = _joystickX;
-    final y = _joystickY;
-    try {
-      await api.sendJoystick(deviceId: widget.deviceId, x: x, y: y);
-    } catch (_) {
-      // 摇杆连续发送期间静默失败，避免刷屏提示；网络异常会在下次操作时体现。
-    } finally {
-      _joystickSending = false;
-    }
-  }
-
   Future<void> _callEmergencyNumber() async {
     final uri = Uri(scheme: 'tel', path: AppConfig.emergencyPhoneNumber);
     try {
@@ -184,7 +138,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                         child: RefreshIndicator(
                           onRefresh: _load,
                           child: ListView(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                             children: [
                               _SpeedCard(
                                 speedKmh: latest?.speed ?? 0,
@@ -246,6 +200,18 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                                     ),
                                   ),
                                   DashboardTile(
+                                    icon: Icons.games_outlined,
+                                    label: '遥控',
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => RemoteControlPage(
+                                          deviceId: widget.deviceId,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DashboardTile(
                                     icon: Icons.warning_outlined,
                                     label: '防摔报警',
                                     alert: status?.fallDetected ?? false,
@@ -263,16 +229,6 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                               ),
                             ],
                           ),
-                        ),
-                      ),
-                      // 摇杆控制面板放在可滚动区域之外，避免拖动摇杆时和
-                      // ListView/下拉刷新的手势竞争导致"中间不好拖动"。
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                        child: _DirectionControlPanel(
-                          disabled: loading,
-                          onJoystickChanged: _onJoystickChanged,
-                          onJoystickReleased: _onJoystickReleased,
                         ),
                       ),
                     ],
@@ -561,60 +517,6 @@ class _DashboardGrid extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _DirectionControlPanel extends StatelessWidget {
-  final bool disabled;
-  final void Function(int x, int y) onJoystickChanged;
-  final VoidCallback onJoystickReleased;
-
-  const _DirectionControlPanel({
-    required this.disabled,
-    required this.onJoystickChanged,
-    required this.onJoystickReleased,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE1E7E4)),
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '方向控制',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF176B5B),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '拖动摇杆控制轮椅方向，松手自动回中并停止',
-            style: TextStyle(
-              color: Colors.black.withValues(alpha: 0.5),
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: JoystickPad(
-              size: 180,
-              disabled: disabled,
-              onChanged: onJoystickChanged,
-              onReleased: onJoystickReleased,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
