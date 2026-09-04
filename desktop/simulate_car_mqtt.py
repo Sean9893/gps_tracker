@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Subscribe to MQTT device commands and print simulated car actions."
     )
-    parser.add_argument("--host", default="121.43.25.166", help="MQTT broker host")
+    parser.add_argument("--host", default="115.29.222.45", help="MQTT broker host")
     parser.add_argument("--port", type=int, default=1883, help="MQTT broker port")
     parser.add_argument("--device-id", default="gps_001", help="Device ID to simulate")
     parser.add_argument(
@@ -54,13 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--password", default="", help="MQTT password")
     parser.add_argument(
         "--api-base-url",
-        default="http://121.43.25.166:8000",
+        default="http://115.29.222.45:8000",
         help="Backend base URL used to keep the simulated car online.",
     )
     parser.add_argument(
         "--heartbeat-interval",
         type=float,
-        default=60.0,
+        default=15.0,
         help="Seconds between GPS heartbeat uploads. Use 0 to disable.",
     )
     parser.add_argument("--lat", type=float, default=31.2304, help="Heartbeat latitude")
@@ -68,12 +68,26 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--speed", type=float, default=0.0, help="Heartbeat speed")
     parser.add_argument("--course", type=float, default=0.0, help="Heartbeat course")
     parser.add_argument("--satellites", type=int, default=8, help="Heartbeat satellites")
+    parser.add_argument("--battery", type=int, default=80, help="Heartbeat battery percentage (0-100)")
     parser.add_argument(
         "--client-id",
         default="",
         help="MQTT client ID. Defaults to a unique sim-car-{device_id}-{pid} value.",
     )
     parser.add_argument("--qos", type=int, default=1, choices=[0, 1, 2], help="MQTT QoS")
+    parser.add_argument(
+        "--health-interval",
+        type=float,
+        default=20.0,
+        help="Seconds between heart-rate/SpO2 heartbeat publishes over MQTT. Use 0 to disable.",
+    )
+    parser.add_argument("--heart-rate", type=int, default=80, help="Simulated heart rate (bpm)")
+    parser.add_argument("--spo2", type=int, default=97, help="Simulated blood oxygen (SpO2 %%)")
+    parser.add_argument(
+        "--health-topic",
+        default="health/upload",
+        help="MQTT topic the backend consumer listens on for heart-rate/SpO2 uploads.",
+    )
     return parser
 
 
@@ -116,6 +130,7 @@ def upload_gps_heartbeat(args: argparse.Namespace, session: requests.Session) ->
         "course": args.course,
         "satellites": args.satellites,
         "fix": 1,
+        "battery": args.battery,
     }
     resp = session.post(url, json=payload, timeout=5)
     resp.raise_for_status()
@@ -135,13 +150,53 @@ def start_heartbeat(args: argparse.Namespace, stop_event: threading.Event) -> th
             try:
                 upload_gps_heartbeat(args, session)
                 print(
-                    f"GPS heartbeat uploaded for {args.device_id}. "
+                    f"GPS heartbeat uploaded for {args.device_id} "
+                    f"(lat={args.lat}, lng={args.lng}, battery={args.battery}%). "
                     "The mobile app should show it online.",
                     flush=True,
                 )
             except Exception as exc:
                 print(f"GPS heartbeat upload failed: {exc}", flush=True)
             stop_event.wait(args.heartbeat_interval)
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    return thread
+
+
+def start_health_heartbeat(
+    args: argparse.Namespace,
+    client: mqtt.Client,
+    connected_event: threading.Event,
+    stop_event: threading.Event,
+) -> threading.Thread | None:
+    """Periodically publish a heart-rate/SpO2 sample over MQTT, same as a real
+    wearable/health sensor bundled with the wheelchair would do."""
+    if args.health_interval <= 0:
+        print("Health heartbeat disabled.", flush=True)
+        return None
+
+    def worker() -> None:
+        if not connected_event.wait(timeout=15):
+            print("Health heartbeat: MQTT never connected, skipping.", flush=True)
+            return
+        while not stop_event.is_set():
+            payload = {
+                "device_id": args.device_id,
+                "heart_rate": args.heart_rate,
+                "spo2": args.spo2,
+            }
+            try:
+                client.publish(args.health_topic, json.dumps(payload), qos=args.qos)
+                print(
+                    f"Health heartbeat published for {args.device_id} "
+                    f"(heart_rate={args.heart_rate}, spo2={args.spo2}). "
+                    "The mobile app health card should show it.",
+                    flush=True,
+                )
+            except Exception as exc:
+                print(f"Health heartbeat publish failed: {exc}", flush=True)
+            stop_event.wait(args.health_interval)
 
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
@@ -155,6 +210,7 @@ def main() -> int:
     client = make_client(client_id)
     stop_event = threading.Event()
     auth_failed = threading.Event()
+    connected_event = threading.Event()
 
     if args.username:
         client.username_pw_set(args.username, args.password)
@@ -173,6 +229,7 @@ def main() -> int:
         print(f"Simulated car device_id: {args.device_id}", flush=True)
         print(f"Subscribed topic: {topic}", flush=True)
         client.subscribe(topic, qos=args.qos)
+        connected_event.set()
 
     def on_disconnect(_client: mqtt.Client, _userdata: Any, *args: Any) -> None:
         print(f"Disconnected from MQTT broker, details={args}", flush=True)
@@ -217,6 +274,7 @@ def main() -> int:
 
     try:
         start_heartbeat(args, stop_event)
+        start_health_heartbeat(args, client, connected_event, stop_event)
         print(f"Connecting to MQTT broker {args.host}:{args.port} ...", flush=True)
         client.connect(args.host, args.port, 60)
         client.loop_forever()

@@ -167,9 +167,11 @@ class _DeviceListPageState extends State<DeviceListPage> {
                                         width: 46,
                                         height: 46,
                                         decoration: BoxDecoration(
-                                          color: device.online
-                                              ? const Color(0xFFE0F3EC)
-                                              : const Color(0xFFE9ECEB),
+                                          color: device.fallDetected
+                                              ? const Color(0xFFF4D4D4)
+                                              : device.online
+                                                  ? const Color(0xFFE0F3EC)
+                                                  : const Color(0xFFE9ECEB),
                                           borderRadius:
                                               BorderRadius.circular(8),
                                         ),
@@ -184,14 +186,25 @@ class _DeviceListPageState extends State<DeviceListPage> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              device.deviceName.isEmpty
-                                                  ? device.deviceId
-                                                  : device.deviceName,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w700,
-                                              ),
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    device.deviceName.isEmpty
+                                                        ? device.deviceId
+                                                        : device.deviceName,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (device.fallDetected) ...[
+                                                  const SizedBox(width: 6),
+                                                  const _FallAlertBadge(),
+                                                ],
+                                              ],
                                             ),
                                             const SizedBox(height: 3),
                                             Text(
@@ -234,6 +247,37 @@ class _DeviceListPageState extends State<DeviceListPage> {
                         ),
                     ],
                   ),
+      ),
+    );
+  }
+}
+
+class _FallAlertBadge extends StatelessWidget {
+  const _FallAlertBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFFC43D3D);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4D4D4),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.warning_rounded, color: color, size: 13),
+          SizedBox(width: 3),
+          Text(
+            '摔倒告警',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

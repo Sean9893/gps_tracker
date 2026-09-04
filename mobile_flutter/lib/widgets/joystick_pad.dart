@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'wheelchair_icon.dart';
@@ -81,6 +82,8 @@ class _JoystickPadState extends State<JoystickPad> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      dragStartBehavior: DragStartBehavior.down,
       onPanStart: widget.disabled
           ? null
           : (details) => _updateFromLocalPosition(details.localPosition),

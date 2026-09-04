@@ -32,6 +32,7 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   HealthData? health;
   Timer? healthTimer;
   bool healthRefreshInProgress = false;
+  bool statusRefreshInProgress = false;
 
   Timer? _joystickThrottleTimer;
   bool _joystickDragging = false;
@@ -43,9 +44,14 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
   void initState() {
     super.initState();
     _load();
+    // 每 2 秒同时刷新健康数据（心率/血氧）和设备状态（含摔倒检测），
+    // 保证有人摔倒时"防摔报警"能在页面停留期间自动弹出，而不需要手动下拉刷新。
     healthTimer = Timer.periodic(
       const Duration(seconds: 2),
-      (_) => _refreshHealth(),
+      (_) {
+        _refreshHealth();
+        _refreshStatus();
+      },
     );
   }
 
@@ -91,6 +97,19 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
       if (mounted) setState(() => health = null);
     } finally {
       healthRefreshInProgress = false;
+    }
+  }
+
+  Future<void> _refreshStatus() async {
+    if (statusRefreshInProgress) return;
+    statusRefreshInProgress = true;
+    try {
+      final nextStatus = await api.fetchStatus(widget.deviceId);
+      if (mounted) setState(() => status = nextStatus);
+    } catch (_) {
+      // 静默失败，保留上一次已知状态，避免网络抖动时闪烁/误报。
+    } finally {
+      statusRefreshInProgress = false;
     }
   }
 
@@ -159,95 +178,105 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
             ? const Center(child: CircularProgressIndicator())
             : error != null
                 ? _ErrorView(message: error!, onRetry: _load)
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                      children: [
-                        _SpeedCard(
-                          speedKmh: latest?.speed ?? 0,
-                          moving: latest?.moving ?? false,
-                          battery: latest?.battery ?? 0,
-                          online: status?.online ?? false,
-                          onBack: () => Navigator.pop(context),
-                          onRefresh: loading ? null : _load,
-                        ),
-                      const SizedBox(height: 16),
-                      _DashboardGrid(
-                        children: [
-                          DashboardTile(
-                            icon: Icons.phone_in_talk_outlined,
-                            label: '一键呼叫',
-                            onPressed: _callEmergencyNumber,
-                          ),
-                          DashboardTile(
-                            icon: Icons.location_on_outlined,
-                            label: 'GPS定位',
-                            onPressed: latest == null
-                                ? null
-                                : () => Navigator.push(
+                : Column(
+                    children: [
+                      Expanded(
+                        child: RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                            children: [
+                              _SpeedCard(
+                                speedKmh: latest?.speed ?? 0,
+                                moving: latest?.moving ?? false,
+                                battery: latest?.battery ?? 0,
+                                online: status?.online ?? false,
+                                onBack: () => Navigator.pop(context),
+                                onRefresh: loading ? null : _load,
+                              ),
+                              const SizedBox(height: 16),
+                              _DashboardGrid(
+                                children: [
+                                  DashboardTile(
+                                    icon: Icons.phone_in_talk_outlined,
+                                    label: '一键呼叫',
+                                    onPressed: _callEmergencyNumber,
+                                  ),
+                                  DashboardTile(
+                                    icon: Icons.location_on_outlined,
+                                    label: 'GPS定位',
+                                    onPressed: latest == null
+                                        ? null
+                                        : () => Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => MapPage(
+                                                  deviceId: widget.deviceId,
+                                                ),
+                                              ),
+                                            ),
+                                  ),
+                                  DashboardTile(
+                                    icon: Icons.shield_outlined,
+                                    label: '电子围栏',
+                                    alert: fence?.inside == false &&
+                                        fence?.enabled == true,
+                                    onPressed: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => GeofencePage(
+                                            deviceId: widget.deviceId,
+                                          ),
+                                        ),
+                                      );
+                                      _load();
+                                    },
+                                  ),
+                                  DashboardTile(
+                                    icon: Icons.route_outlined,
+                                    label: '行驶轨迹',
+                                    onPressed: () => Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => MapPage(
+                                        builder: (_) => HistoryPage(
                                           deviceId: widget.deviceId,
                                         ),
                                       ),
                                     ),
-                          ),
-                          DashboardTile(
-                            icon: Icons.shield_outlined,
-                            label: '电子围栏',
-                            alert: fence?.inside == false &&
-                                fence?.enabled == true,
-                            onPressed: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => GeofencePage(
-                                    deviceId: widget.deviceId,
                                   ),
-                                ),
-                              );
-                              _load();
-                            },
-                          ),
-                          DashboardTile(
-                            icon: Icons.route_outlined,
-                            label: '行驶轨迹',
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => HistoryPage(
-                                  deviceId: widget.deviceId,
-                                ),
+                                  DashboardTile(
+                                    icon: Icons.warning_outlined,
+                                    label: '防摔报警',
+                                    alert: status?.fallDetected ?? false,
+                                    onPressed: null,
+                                  ),
+                                  DashboardTile(
+                                    icon: Icons.favorite_outline,
+                                    label: '健康',
+                                    subtitle: health == null
+                                        ? '加载中...'
+                                        : '${health!.heartRateText} | ${health!.spo2Text}',
+                                    onPressed: null,
+                                  ),
+                                ],
                               ),
-                            ),
+                            ],
                           ),
-                          DashboardTile(
-                            icon: Icons.warning_outlined,
-                            label: '防摔报警',
-                            alert: status?.fallDetected ?? false,
-                            onPressed: null,
-                          ),
-                          DashboardTile(
-                            icon: Icons.favorite_outline,
-                            label: '健康',
-                            subtitle: health == null
-                                ? '加载中...'
-                                : '${health!.heartRateText} | ${health!.spo2Text}',
-                            onPressed: null,
-                          ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 20),
-                      _DirectionControlPanel(
-                        disabled: loading,
-                        onJoystickChanged: _onJoystickChanged,
-                        onJoystickReleased: _onJoystickReleased,
+                      // 摇杆控制面板放在可滚动区域之外，避免拖动摇杆时和
+                      // ListView/下拉刷新的手势竞争导致"中间不好拖动"。
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        child: _DirectionControlPanel(
+                          disabled: loading,
+                          onJoystickChanged: _onJoystickChanged,
+                          onJoystickReleased: _onJoystickReleased,
+                        ),
                       ),
                     ],
                   ),
-                ),
       ),
     );
   }

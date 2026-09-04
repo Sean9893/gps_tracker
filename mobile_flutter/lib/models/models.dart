@@ -3,12 +3,14 @@ class DeviceSummary {
   final String deviceName;
   final bool online;
   final String? lastOnlineTime;
+  final bool fallDetected;
 
   DeviceSummary({
     required this.deviceId,
     required this.deviceName,
     required this.online,
     required this.lastOnlineTime,
+    required this.fallDetected,
   });
 
   factory DeviceSummary.fromJson(Map<String, dynamic> json) {
@@ -17,6 +19,7 @@ class DeviceSummary {
       deviceName: json['device_name'] ?? '',
       online: json['online'] ?? false,
       lastOnlineTime: json['last_online_time'],
+      fallDetected: json['fall_detected'] ?? false,
     );
   }
 }

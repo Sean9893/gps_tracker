@@ -163,6 +163,7 @@ def list_devices(db: Session) -> list[dict]:
                 "device_name": d.device_name,
                 "online": online,
                 "last_online_time": d.last_online_time.isoformat() + "Z" if d.last_online_time else None,
+                "fall_detected": d.fall_detected,
             }
         )
     return out
