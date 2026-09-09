@@ -8,6 +8,7 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../widgets/dashboard_tile.dart';
 import '../widgets/speed_gauge.dart';
+import 'emergency_contact_page.dart';
 import 'geofence_page.dart';
 import 'history_page.dart';
 import 'map_page.dart';
@@ -216,6 +217,18 @@ class _DeviceDetailPageState extends State<DeviceDetailPage> {
                                     label: '防摔报警',
                                     alert: status?.fallDetected ?? false,
                                     onPressed: null,
+                                  ),
+                                  DashboardTile(
+                                    icon: Icons.contact_phone_outlined,
+                                    label: '紧急联系人',
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => EmergencyContactPage(
+                                          deviceId: widget.deviceId,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                   DashboardTile(
                                     icon: Icons.favorite_outline,

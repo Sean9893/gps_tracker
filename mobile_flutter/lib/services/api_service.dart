@@ -141,6 +141,41 @@ class ApiService {
     return GeofenceConfig.fromJson(body['data']);
   }
 
+  Future<EmergencyContact> fetchEmergencyContact(String deviceId) async {
+    final encodedId = Uri.encodeComponent(deviceId);
+    final uri = Uri.parse('$baseUrl/api/device/$encodedId/emergency-contact');
+    final resp = await http.get(uri).timeout(_timeout);
+    final body = _decode(resp);
+    if (body['code'] != 0 || body['data'] == null) {
+      throw Exception(body['msg'] ?? '获取紧急联系人失败');
+    }
+    return EmergencyContact.fromJson(body['data']);
+  }
+
+  Future<EmergencyContact> setEmergencyContact({
+    required String deviceId,
+    required String phoneNumber,
+    String contactName = '',
+  }) async {
+    final encodedId = Uri.encodeComponent(deviceId);
+    final uri = Uri.parse('$baseUrl/api/device/$encodedId/emergency-contact');
+    final resp = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'phone_number': phoneNumber,
+            'contact_name': contactName,
+          }),
+        )
+        .timeout(_timeout);
+    final body = _decode(resp);
+    if (body['code'] != 0 || body['data'] == null) {
+      throw Exception(body['msg'] ?? '设置紧急联系人失败');
+    }
+    return EmergencyContact.fromJson(body['data']);
+  }
+
   Map<String, dynamic> _decode(http.Response resp) {
     final obj = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {

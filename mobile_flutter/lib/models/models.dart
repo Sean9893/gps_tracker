@@ -171,3 +171,26 @@ class GeofenceConfig {
     );
   }
 }
+
+class EmergencyContact {
+  final String deviceId;
+  final bool configured;
+  final String? phoneNumber;
+  final String? contactName;
+
+  EmergencyContact({
+    required this.deviceId,
+    required this.configured,
+    this.phoneNumber,
+    this.contactName,
+  });
+
+  factory EmergencyContact.fromJson(Map<String, dynamic> json) {
+    return EmergencyContact(
+      deviceId: json['device_id'] ?? '',
+      configured: json['configured'] ?? false,
+      phoneNumber: json['phone_number'],
+      contactName: json['contact_name'],
+    );
+  }
+}
