@@ -9,6 +9,11 @@ from app.mqtt.publisher import (
     publish_device_joystick,
 )
 from app.schemas.command import DeviceCommandReq, DeviceJoystickReq
+from app.schemas.emergency import EmergencyContactReq
+from app.services.emergency_service import (
+    get_emergency_contact_config,
+    set_emergency_contact,
+)
 from app.services.gps_service import get_device_status, list_devices
 
 router = APIRouter()
@@ -53,3 +58,27 @@ def send_joystick(device_id: str, req: DeviceJoystickReq):
             "topic": topic,
         }
     )
+
+
+@router.get("/{device_id}/emergency-contact")
+def get_emergency_contact(device_id: str, db: Session = Depends(get_db)):
+    """查询设备绑定的紧急联系人号码"""
+    return success(get_emergency_contact_config(db, device_id))
+
+
+@router.post("/{device_id}/emergency-contact")
+def update_emergency_contact(
+    device_id: str, req: EmergencyContactReq, db: Session = Depends(get_db)
+):
+    """
+    手机 APP 设置/更新设备的紧急联系人号码。
+    
+    服务器会：
+    1. 存储号码到数据库
+    2. 通过 MQTT 下发号码给轮椅设备
+    3. 轮椅固件负责在摔倒时自动拨打该号码
+    """
+    config = set_emergency_contact(
+        db, device_id, req.phone_number, req.contact_name
+    )
+    return success(config)

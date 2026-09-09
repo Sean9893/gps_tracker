@@ -44,13 +44,13 @@ def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
             device_name=req.device_id,
             status=1,
             last_online_time=now,
-            fall_detected=req.fall_detected,
+            fall_detected=bool(req.fall_detected),
         )
         db.add(device)
     else:
         device.status = 1
         device.last_online_time = now
-        device.fall_detected = req.fall_detected
+        device.fall_detected = bool(req.fall_detected)
 
     if req.fix == 1:
         evaluate_geofence(db, req.device_id, req.lat, req.lng, now)

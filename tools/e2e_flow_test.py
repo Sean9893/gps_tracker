@@ -133,7 +133,7 @@ def test_gps_and_health_flow(args, device_id: str) -> None:
         {
             "device_id": device_id, "lat": base_lat, "lng": base_lng, "speed": 0,
             "course": 0, "satellites": satellites, "fix": 1, "battery": battery,
-            "fall_detected": False,
+            "fall_detected": 0,
         },
         args.mqtt_username, args.mqtt_password,
     )
@@ -148,7 +148,7 @@ def test_gps_and_health_flow(args, device_id: str) -> None:
         {
             "device_id": device_id, "lat": moved_lat, "lng": base_lng, "speed": speed_kmh,
             "course": 0, "satellites": satellites, "fix": 1, "battery": battery,
-            "fall_detected": False,
+            "fall_detected": 0,
         },
         args.mqtt_username, args.mqtt_password,
     )
@@ -198,9 +198,9 @@ def test_gps_and_health_flow(args, device_id: str) -> None:
 
     resp = requests.get(f"{args.api_base_url}/api/device/status", params={"device_id": device_id}, timeout=10).json()
     data = resp.get("data") or {}
-    ok = resp.get("code") == 0 and data.get("online") is True and data.get("fall_detected") is False
+    ok = resp.get("code") == 0 and data.get("online") is True and data.get("fall_detected") == 0
     record(
-        "/api/device/status 显示设备在线，摔倒检测状态为正常(false)",
+        "/api/device/status 显示设备在线，摔倒检测状态为正常(0)",
         ok,
         json.dumps(data, ensure_ascii=False),
     )
@@ -211,13 +211,13 @@ def test_fall_detection_flow(args, device_id: str) -> None:
 
     lat, lng = 31.2304, 121.4737
 
-    # 触发摔倒：上报 fall_detected=true
+    # 触发摔倒：上报 fall_detected=1
     publish_once(
         args.mqtt_host, args.mqtt_port, "gps/upload",
         {
             "device_id": device_id, "lat": lat, "lng": lng, "speed": 0,
             "course": 0, "satellites": 9, "fix": 1, "battery": 60,
-            "fall_detected": True,
+            "fall_detected": 1,
         },
         args.mqtt_username, args.mqtt_password,
     )
@@ -225,20 +225,20 @@ def test_fall_detection_flow(args, device_id: str) -> None:
 
     resp = requests.get(f"{args.api_base_url}/api/device/status", params={"device_id": device_id}, timeout=10).json()
     data = resp.get("data") or {}
-    ok = resp.get("code") == 0 and data.get("fall_detected") is True
+    ok = resp.get("code") == 0 and data.get("fall_detected") == 1
     record(
-        "上报 fall_detected=true 后 /api/device/status 正确显示摔倒告警（手机端\"防摔报警\"红点数据源）",
+        "上报 fall_detected=1 后 /api/device/status 正确显示摔倒告警（手机端\"防摔报警\"红点数据源）",
         ok,
         json.dumps(data, ensure_ascii=False),
     )
 
-    # 恢复：下一次上报 fall_detected=false 应该能清除告警
+    # 恢复：下一次上报 fall_detected=0 应该能清除告警
     publish_once(
         args.mqtt_host, args.mqtt_port, "gps/upload",
         {
             "device_id": device_id, "lat": lat, "lng": lng, "speed": 0,
             "course": 0, "satellites": 9, "fix": 1, "battery": 60,
-            "fall_detected": False,
+            "fall_detected": 0,
         },
         args.mqtt_username, args.mqtt_password,
     )
@@ -246,9 +246,9 @@ def test_fall_detection_flow(args, device_id: str) -> None:
 
     resp = requests.get(f"{args.api_base_url}/api/device/status", params={"device_id": device_id}, timeout=10).json()
     data = resp.get("data") or {}
-    ok = resp.get("code") == 0 and data.get("fall_detected") is False
+    ok = resp.get("code") == 0 and data.get("fall_detected") == 0
     record(
-        "后续上报 fall_detected=false 后 /api/device/status 正确恢复正常",
+        "后续上报 fall_detected=0 后 /api/device/status 正确恢复正常",
         ok,
         json.dumps(data, ensure_ascii=False),
     )

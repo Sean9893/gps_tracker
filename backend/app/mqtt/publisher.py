@@ -77,3 +77,21 @@ def publish_device_joystick(device_id: str, x: int, y: int) -> str:
     }
     _publish_payload(topic, payload)
     return topic
+
+
+def publish_emergency_contact(device_id: str, phone_number: str) -> str:
+    """Push the emergency contact phone number down to the wheelchair.
+
+    Reuses the same command topic. The wheelchair firmware is responsible
+    for persisting this number and dialing it automatically when it
+    detects a fall; the server itself never places the call.
+    """
+    topic = build_command_topic(device_id)
+    payload: dict[str, Any] = {
+        "device_id": device_id,
+        "type": "set_emergency_contact",
+        "phone_number": phone_number,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    _publish_payload(topic, payload)
+    return topic

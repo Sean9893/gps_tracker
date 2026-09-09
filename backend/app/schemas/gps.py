@@ -14,7 +14,14 @@ class GpsUploadReq(BaseModel):
     satellites: int = 0
     fix: int
     battery: int = 0
-    fall_detected: bool = False
+    fall_detected: int = 0
+
+    @field_validator("fall_detected")
+    @classmethod
+    def validate_fall_detected(cls, v: int) -> int:
+        if v not in (0, 1):
+            raise ValueError("fall_detected must be 0 or 1")
+        return v
 
     @field_validator("lat")
     @classmethod

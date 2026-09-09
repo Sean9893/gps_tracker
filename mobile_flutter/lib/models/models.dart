@@ -19,10 +19,15 @@ class DeviceSummary {
       deviceName: json['device_name'] ?? '',
       online: json['online'] ?? false,
       lastOnlineTime: json['last_online_time'],
-      fallDetected: json['fall_detected'] ?? false,
+      fallDetected: _asBool(json['fall_detected']),
     );
   }
 }
+
+// 摔倒检测协议字段使用 0/1（整型），同时兼容历史上可能出现的
+// true/false（布尔），避免新旧后端/固件混用时解析出错。
+bool _asBool(dynamic v) => v == 1 || v == true;
+
 
 class GpsPoint {
   final String deviceId;
@@ -92,7 +97,7 @@ class DeviceStatus {
       lastOnlineTime: json['last_online_time'],
       lastFix: json['last_fix'],
       lastLocation: json['last_location'],
-      fallDetected: json['fall_detected'] ?? false,
+      fallDetected: _asBool(json['fall_detected']),
     );
   }
 }
