@@ -1,20 +1,32 @@
 """
-完整功能的 GPS 轮椅模拟器（本机运行）
+完整功能的 GPS 轮椅模拟器（本机运行）—— 单一总线 topic 版本
+
+固件只需要硬编码一个固定的 MQTT topic 字符串（不用拼接 device_id），
+所有通信（上行 GPS/健康数据、下行指令/摇杆/紧急联系人）都走这一个 topic：
+
+    device/all
+
+消息用 dir（up=设备上报 / down=服务器下发）+ type + id（设备号）区分：
+
+  上行 GPS：    {"dir":"up","type":"gps","id":"gps_001","la":..,"lo":..,"sp":..,"co":..,"st":..,"fx":..,"bat":..,"fd":..}
+  上行健康：    {"dir":"up","type":"health","id":"gps_001","hr":80,"sp2":97}
+  下行离散指令：{"dir":"down","type":"command","id":"gps_001","command":"forward"}
+  下行摇杆：    {"dir":"down","type":"joystick","id":"gps_001","x":512,"y":800}
+  下行紧急联系人：{"dir":"down","type":"set_emergency_contact","id":"gps_001","phone_number":"..."}
+
+因为是同一个 topic，所有设备都会收到彼此的上行/下行消息，
+设备端必须自行过滤：只处理 dir=="down" 且 id==自己 device_id 的消息，其余一律忽略
+（包括自己上报的回声、以及服务器下发给其他设备的指令）。
 
 功能：
-1. 订阅 MQTT 指令（摇杆/离散命令/紧急联系人下发）
-2. 定期上报 GPS+电池+摔倒状态（MQTT，topic: gps/upload，简写字段）
-3. 定期上报健康数据（MQTT，topic: health/upload，简写字段）
+1. 订阅统一总线 topic，过滤出下发给自己的指令（摇杆/离散命令/紧急联系人）
+2. 定期通过总线 topic 上报 GPS+电池+摔倒状态
+3. 定期通过总线 topic 上报健康数据
 4. 模拟摔倒检测（手动触发/自动触发）
 5. 模拟移动轨迹（在起点附近随机游走）
 6. 模拟电池放电
 7. 接收并保存紧急联系人号码
 8. 摔倒时模拟自动拨号（打印输出）
-
-设备上行协议（简写字段，贴近真实硬件省流量）：
-  gps/upload:    {id, la, lo, sp, co, st, fx, bat, fd}
-  health/upload: {id, hr, sp2}
-  （服务器同时兼容全称字段名，此处使用简写用于演练真实协议）
 
 运行示例：
     python simulator_full.py --device-id gps_001
@@ -39,9 +51,11 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
 
+BUS_TOPIC = "device/all"
+
 
 class WheelchairSimulator:
-    """完整功能的轮椅模拟器"""
+    """完整功能的轮椅模拟器（单一总线 topic 协议）"""
 
     JOYSTICK_CENTER = 512
     JOYSTICK_DEADZONE = 100
@@ -49,6 +63,7 @@ class WheelchairSimulator:
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.device_id = args.device_id
+        self.bus_topic = args.bus_topic
 
         # 位置状态（随机游走）
         self.lat = args.lat
@@ -96,9 +111,8 @@ class WheelchairSimulator:
 
     def _on_connect(self, client: mqtt.Client, _userdata: Any, _flags: Any, reason_code: Any, *_args: Any) -> None:
         print(f"[MQTT] Connected: {self.args.host}:{self.args.port}, rc={reason_code}")
-        topic = f"gps/device/{self.device_id}/command"
-        client.subscribe(topic, qos=1)
-        print(f"[MQTT] Subscribed: {topic}")
+        client.subscribe(self.bus_topic, qos=1)
+        print(f"[MQTT] Subscribed (单一总线topic): {self.bus_topic}")
         self.connected.set()
 
     def _on_disconnect(self, _client: mqtt.Client, _userdata: Any, *args: Any) -> None:
@@ -111,22 +125,35 @@ class WheelchairSimulator:
             print(f"[MQTT] Invalid payload: {e}")
             return
 
+        # 单一总线 topic 上会收到所有设备的上行/下行消息，必须自行过滤：
+        # 只处理 dir=="down" 且 id==自己 device_id 的消息，其余静默忽略
+        # （包括自己上报的回声、以及发给其他设备的指令）。
+        direction = data.get("dir")
+        target_id = data.get("id")
+
+        if direction != "down":
+            return  # 忽略所有上行消息（自己或别的设备的GPS/健康上报回声）
+        if target_id != self.device_id:
+            return  # 不是发给自己的指令，忽略
+
         print(f"\n{'='*60}")
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] MQTT 指令接收")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] 总线指令接收（目标: {target_id}）")
         print(f"{'='*60}")
         print(f"Topic: {msg.topic}")
         print(f"Payload: {json.dumps(data, ensure_ascii=False, indent=2)}")
 
+        msg_type = data.get("type")
+
         # 紧急联系人下发
-        if data.get("type") == "set_emergency_contact":
+        if msg_type == "set_emergency_contact":
             self.emergency_phone = data.get("phone_number")
-            self.emergency_name = self.device_id  # 可以从payload获取
+            self.emergency_name = self.device_id
             print(f"[设备] 紧急联系人已保存: {self.emergency_phone}")
             print(f"[设备] 下次摔倒时将自动拨打该号码")
             return
 
         # 摇杆控制
-        if "x" in data and "y" in data:
+        if msg_type == "joystick" and "x" in data and "y" in data:
             x, y = int(data["x"]), int(data["y"])
             action = self._classify_joystick(x, y)
             print(f"[摇杆] X={x}, Y={y} -> 动作: {action}")
@@ -135,13 +162,13 @@ class WheelchairSimulator:
 
         # 离散指令
         command = data.get("command")
-        if command in ["forward", "backward", "left", "right"]:
+        if msg_type == "command" and command in ["forward", "backward", "left", "right"]:
             action = command.upper()
             print(f"[指令] {command} -> 动作: {action}")
             self._simulate_movement(action)
             return
 
-        print(f"[警告] 未知指令类型")
+        print(f"[警告] 未知指令类型: type={msg_type}")
 
     def _classify_joystick(self, x: int, y: int) -> str:
         dx = x - self.JOYSTICK_CENTER
@@ -179,12 +206,12 @@ class WheelchairSimulator:
             self.course = 90
 
     def _gps_heartbeat_worker(self) -> None:
-        """GPS 心跳线程：通过 MQTT 上报位置、电池、摔倒状态（简写字段）"""
+        """GPS 心跳线程：通过总线 topic 上报位置、电池、摔倒状态"""
         if not self.connected.wait(timeout=10):
             print("[GPS] MQTT 未连接，跳过")
             return
 
-        print(f"[GPS心跳] 启动，间隔 {self.args.gps_interval}s，topic=gps/upload")
+        print(f"[GPS心跳] 启动，间隔 {self.args.gps_interval}s，topic={self.bus_topic}")
 
         while not self.stop_event.is_set():
             try:
@@ -197,9 +224,10 @@ class WheelchairSimulator:
                 if self.battery > 0 and random.random() < 0.1:
                     self.battery -= 1
 
-                # 设备上行协议简写字段：
-                # id/la/lo/sp/co/st/fx/bat/fd
+                # 统一总线协议：dir=up, type=gps, id=设备号 + 简写字段
                 payload = {
+                    "dir": "up",
+                    "type": "gps",
                     "id": self.device_id,
                     "la": round(self.lat, 6),
                     "lo": round(self.lng, 6),
@@ -212,7 +240,7 @@ class WheelchairSimulator:
                 }
 
                 result = self.client.publish(
-                    "gps/upload", json.dumps(payload, ensure_ascii=False), qos=1
+                    self.bus_topic, json.dumps(payload, ensure_ascii=False), qos=1
                 )
                 result.wait_for_publish(timeout=3)
 
@@ -228,12 +256,12 @@ class WheelchairSimulator:
             self.stop_event.wait(self.args.gps_interval)
 
     def _health_heartbeat_worker(self) -> None:
-        """健康数据心跳线程：定期上报心率/血氧（简写字段）"""
+        """健康数据心跳线程：通过总线 topic 定期上报心率/血氧"""
         if not self.connected.wait(timeout=10):
             print("[健康] MQTT 未连接，跳过")
             return
 
-        print(f"[健康心跳] 启动，间隔 {self.args.health_interval}s，topic=health/upload")
+        print(f"[健康心跳] 启动，间隔 {self.args.health_interval}s，topic={self.bus_topic}")
 
         while not self.stop_event.is_set():
             try:
@@ -241,14 +269,18 @@ class WheelchairSimulator:
                 self.heart_rate = random.randint(70, 95)
                 self.spo2 = random.randint(95, 99)
 
-                # 设备上行协议简写字段：id/hr/sp2
+                # 统一总线协议：dir=up, type=health, id=设备号 + 简写字段
                 payload = {
+                    "dir": "up",
+                    "type": "health",
                     "id": self.device_id,
                     "hr": self.heart_rate,
                     "sp2": self.spo2,
                 }
 
-                self.client.publish("health/upload", json.dumps(payload, ensure_ascii=False), qos=1)
+                self.client.publish(
+                    self.bus_topic, json.dumps(payload, ensure_ascii=False), qos=1
+                )
                 print(f"[健康] 上报成功 - 心率:{self.heart_rate} bpm | 血氧:{self.spo2}%")
 
             except Exception as e:
@@ -299,11 +331,11 @@ class WheelchairSimulator:
     def run(self) -> int:
         """启动模拟器"""
         print(f"\n{'='*60}")
-        print(f"GPS 轮椅完整功能模拟器")
+        print(f"GPS 轮椅完整功能模拟器（单一总线topic协议）")
         print(f"{'='*60}")
         print(f"设备ID: {self.device_id}")
         print(f"MQTT: {self.args.host}:{self.args.port}")
-        print(f"上行协议: 简写字段 (gps/upload: id/la/lo/sp/co/st/fx/bat/fd)")
+        print(f"统一总线 topic: {self.bus_topic}")
         print(f"初始位置: ({self.lat}, {self.lng})")
         print(f"自动摔倒: {'开启' if self.args.auto_fall else '关闭'}")
         print(f"{'='*60}\n")
@@ -335,13 +367,14 @@ class WheelchairSimulator:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="GPS轮椅完整功能模拟器")
+    parser = argparse.ArgumentParser(description="GPS轮椅完整功能模拟器（单一总线topic协议）")
 
     # 服务器配置
     parser.add_argument("--host", default="115.29.222.45", help="MQTT服务器")
     parser.add_argument("--port", type=int, default=1883, help="MQTT端口")
     parser.add_argument("--username", default="", help="MQTT用户名")
     parser.add_argument("--password", default="", help="MQTT密码")
+    parser.add_argument("--bus-topic", default=BUS_TOPIC, help="统一总线topic（默认 device/all）")
 
     # 设备配置
     parser.add_argument("--device-id", default="gps_001", help="设备ID")

@@ -68,10 +68,12 @@ class MqttConsumer:
             return
         client.subscribe(settings.mqtt_topic, qos=settings.mqtt_qos)
         client.subscribe(settings.mqtt_health_topic, qos=settings.mqtt_qos)
+        client.subscribe(settings.mqtt_bus_topic, qos=settings.mqtt_qos)
         logger.info(
-            "MQTT subscribed to topics=%s,%s qos=%s",
+            "MQTT subscribed to topics=%s,%s,%s qos=%s",
             settings.mqtt_topic,
             settings.mqtt_health_topic,
+            settings.mqtt_bus_topic,
             settings.mqtt_qos,
         )
 
@@ -84,10 +86,15 @@ class MqttConsumer:
         if payload is None:
             return
         try:
-            kind, req = self._parse_message(msg.topic, payload)
+            parsed = self._parse_message(msg.topic, payload)
         except Exception as exc:
             logger.warning("MQTT payload invalid, topic=%s error=%s", msg.topic, exc)
             return
+        if parsed is None:
+            # 总线 topic 上的下行消息（服务器自己发布的指令回声）或未知类型，
+            # 不是设备上行数据，直接忽略。
+            return
+        kind, req = parsed
 
         db = SessionLocal()
         try:
@@ -105,12 +112,28 @@ class MqttConsumer:
     def _parse_message(
         topic: str,
         payload: str,
-    ) -> tuple[str, GpsUploadReq | HealthUploadReq]:
+    ) -> tuple[str, GpsUploadReq | HealthUploadReq] | None:
         data = json.loads(payload)
+
         if topic == settings.mqtt_topic:
             return "gps", GpsUploadReq.model_validate(data)
         if topic == settings.mqtt_health_topic:
             return "health", HealthUploadReq.model_validate(data)
+
+        if topic == settings.mqtt_bus_topic:
+            # 统一总线协议：{"dir":"up"|"down","type":"gps"|"health"|...,"id":..., ...}
+            # 只处理设备上行(dir=up)的 gps/health 消息；下行指令是服务器自己发布的，
+            # 会被自己订阅收到（回声），需要忽略，避免误当成设备上报处理。
+            direction = data.get("dir")
+            msg_type = data.get("type")
+            if direction != "up":
+                return None
+            if msg_type == "gps":
+                return "gps", GpsUploadReq.model_validate(data)
+            if msg_type == "health":
+                return "health", HealthUploadReq.model_validate(data)
+            raise ValueError(f"unsupported bus message type: {msg_type}")
+
         raise ValueError(f"unsupported MQTT topic: {topic}")
 
     @staticmethod

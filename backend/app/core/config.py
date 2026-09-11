@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     mqtt_topic: str = "gps/upload"
     mqtt_health_topic: str = "health/upload"
     mqtt_command_topic_template: str = "gps/device/{device_id}/command"
+    # 统一总线 topic：固件只需硬编码这一个固定字符串，无需拼接 device_id。
+    # 上行（GPS/健康）和下行（指令/摇杆/紧急联系人）都走这一个 topic，
+    # 靠 payload 里的 dir（up/down）+ type + id 字段区分方向、类型、目标设备。
+    # 旧的分离 topic（mqtt_topic/mqtt_health_topic/mqtt_command_topic_template）
+    # 仍然保留并继续工作，供尚未升级到统一总线协议的设备使用。
+    mqtt_bus_topic: str = "device/all"
     mqtt_client_id: str = "gps-backend"
     mqtt_keepalive: int = 60
     mqtt_qos: int = 1

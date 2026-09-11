@@ -29,6 +29,49 @@ class MqttConsumerTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             MqttConsumer._parse_message("unknown/topic", "{}")
 
+    def test_bus_topic_parses_gps_uplink_with_abbreviated_fields(self):
+        parsed = MqttConsumer._parse_message(
+            "device/all",
+            '{"dir":"up","type":"gps","id":"gps_001","la":31.2,"lo":121.4,'
+            '"sp":0,"co":0,"st":8,"fx":1,"bat":85,"fd":0}',
+        )
+
+        self.assertIsNotNone(parsed)
+        kind, req = parsed
+        self.assertEqual(kind, "gps")
+        self.assertIsInstance(req, GpsUploadReq)
+        self.assertEqual(req.device_id, "gps_001")
+        self.assertEqual(req.battery, 85)
+        self.assertEqual(req.fall_detected, 0)
+
+    def test_bus_topic_parses_health_uplink_with_abbreviated_fields(self):
+        parsed = MqttConsumer._parse_message(
+            "device/all",
+            '{"dir":"up","type":"health","id":"gps_001","hr":80,"sp2":97}',
+        )
+
+        self.assertIsNotNone(parsed)
+        kind, req = parsed
+        self.assertEqual(kind, "health")
+        self.assertIsInstance(req, HealthUploadReq)
+        self.assertEqual(req.heart_rate, 80)
+        self.assertEqual(req.spo2, 97)
+
+    def test_bus_topic_ignores_downlink_echo(self):
+        parsed = MqttConsumer._parse_message(
+            "device/all",
+            '{"dir":"down","type":"command","id":"gps_001","command":"forward"}',
+        )
+
+        self.assertIsNone(parsed)
+
+    def test_bus_topic_rejects_unknown_uplink_type(self):
+        with self.assertRaises(ValueError):
+            MqttConsumer._parse_message(
+                "device/all",
+                '{"dir":"up","type":"weird","id":"gps_001"}',
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
