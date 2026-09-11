@@ -1,20 +1,29 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class GpsUploadReq(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    device_id: str = Field(min_length=1, max_length=64)
-    lat: float
-    lng: float
-    speed: float = 0
-    course: float = 0
-    satellites: int = 0
-    fix: int
-    battery: int = 0
-    fall_detected: int = 0
+    # 设备端上行协议（MQTT gps/upload）同时支持全称和简写字段名，
+    # 用于降低真实硬件（GPS/GSM模块）的上行流量。HTTP接口继续可用全称。
+    # 简写映射：device_id->id, lat->la, lng->lo, speed->sp, course->co,
+    #           satellites->st, fix->fx, battery->bat, fall_detected->fd
+    device_id: str = Field(
+        min_length=1, max_length=64,
+        validation_alias=AliasChoices("device_id", "id"),
+    )
+    lat: float = Field(validation_alias=AliasChoices("lat", "la"))
+    lng: float = Field(validation_alias=AliasChoices("lng", "lo"))
+    speed: float = Field(default=0, validation_alias=AliasChoices("speed", "sp"))
+    course: float = Field(default=0, validation_alias=AliasChoices("course", "co"))
+    satellites: int = Field(default=0, validation_alias=AliasChoices("satellites", "st"))
+    fix: int = Field(validation_alias=AliasChoices("fix", "fx"))
+    battery: int = Field(default=0, validation_alias=AliasChoices("battery", "bat"))
+    fall_detected: int = Field(
+        default=0, validation_alias=AliasChoices("fall_detected", "fd")
+    )
 
     @field_validator("fall_detected")
     @classmethod
@@ -49,4 +58,3 @@ class HistoryQueryReq(BaseModel):
     device_id: str
     start: datetime
     end: datetime
-
