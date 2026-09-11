@@ -32,6 +32,13 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
+# Windows 控制台默认 GBK 编码，emoji/部分符号会导致 print 抛异常，
+# 这里强制用 UTF-8 输出（不支持的字符替换而非报错），并开启行缓冲方便实时查看。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+
 
 class WheelchairSimulator:
     """完整功能的轮椅模拟器"""
