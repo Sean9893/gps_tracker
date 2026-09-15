@@ -72,6 +72,38 @@ class MqttConsumerTest(unittest.TestCase):
                 '{"dir":"up","type":"weird","id":"gps_001"}',
             )
 
+    def test_bus_topic_parses_flat_combined_report_new_format(self):
+        """新格式：device_id 不简写，ba/fa/hr/o2 简写，GPS+健康合并一条消息，无dir/type包装。"""
+        parsed = MqttConsumer._parse_message(
+            "device/all",
+            '{"device_id":"w01","la":31.2,"lo":121.4,"sp":0,"co":0,"st":8,'
+            '"fx":1,"ba":80,"fa":0,"hr":75,"o2":99}',
+        )
+
+        self.assertIsNotNone(parsed)
+        kind, req = parsed
+        self.assertEqual(kind, "gps")
+        self.assertIsInstance(req, GpsUploadReq)
+        self.assertEqual(req.device_id, "w01")
+        self.assertEqual(req.battery, 80)
+        self.assertEqual(req.fall_detected, 0)
+        self.assertEqual(req.heart_rate, 75)
+        self.assertEqual(req.spo2, 99)
+
+    def test_bus_topic_flat_combined_report_without_health_fields(self):
+        """心率/血氧可选：不带这两个字段时应正常解析，且为 None（纯GPS上报）。"""
+        parsed = MqttConsumer._parse_message(
+            "device/all",
+            '{"device_id":"w01","la":31.2,"lo":121.4,"sp":0,"co":0,"st":8,'
+            '"fx":1,"ba":80,"fa":0}',
+        )
+
+        self.assertIsNotNone(parsed)
+        kind, req = parsed
+        self.assertEqual(kind, "gps")
+        self.assertIsNone(req.heart_rate)
+        self.assertIsNone(req.spo2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -121,18 +121,28 @@ class MqttConsumer:
             return "health", HealthUploadReq.model_validate(data)
 
         if topic == settings.mqtt_bus_topic:
-            # 统一总线协议：{"dir":"up"|"down","type":"gps"|"health"|...,"id":..., ...}
-            # 只处理设备上行(dir=up)的 gps/health 消息；下行指令是服务器自己发布的，
-            # 会被自己订阅收到（回声），需要忽略，避免误当成设备上报处理。
+            # 统一总线协议（新版：无需 dir/type 包装的扁平合并上报）：
+            #   {"device_id":"w01","la":..,"lo":..,"sp":..,"co":..,"st":..,"fx":..,
+            #    "ba":..,"fa":..,"hr":..,"o2":..}
+            # 服务器自己下发的指令会带有 "dir":"down" 标记，在同一个topic上会被
+            # 自己收到（回声），必须先排除，避免被误当成设备上报处理。
             direction = data.get("dir")
-            msg_type = data.get("type")
-            if direction != "up":
+            if direction == "down":
                 return None
+
+            # 兼容此前(dir=up + type=gps/health)的过渡格式，仍然可用。
+            msg_type = data.get("type")
             if msg_type == "gps":
                 return "gps", GpsUploadReq.model_validate(data)
             if msg_type == "health":
                 return "health", HealthUploadReq.model_validate(data)
-            raise ValueError(f"unsupported bus message type: {msg_type}")
+            if msg_type is not None:
+                raise ValueError(f"unsupported bus message type: {msg_type}")
+
+            # 新的默认格式：一条消息里同时带 GPS + 电池 + 摔倒 + 心率 + 血氧，
+            # 心率/血氧是可选字段，GpsUploadReq 会在写入GPS记录的同时，
+            # 顺带把心率/血氧写入健康数据表（如果两者都存在）。
+            return "gps", GpsUploadReq.model_validate(data)
 
         raise ValueError(f"unsupported MQTT topic: {topic}")
 

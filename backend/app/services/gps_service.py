@@ -7,7 +7,9 @@ from app.core.config import settings
 from app.models.device_info import DeviceInfo
 from app.models.gps_record import GpsRecord
 from app.schemas.gps import GpsUploadReq
+from app.schemas.health import HealthUploadReq
 from app.services.geofence_service import distance_m, evaluate_geofence
+from app.services.health_service import upsert_health_record
 
 MOVEMENT_THRESHOLD_M = 10.0
 
@@ -56,6 +58,19 @@ def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
         evaluate_geofence(db, req.device_id, req.lat, req.lng, now)
 
     db.commit()
+
+    # 统一上报格式（GPS+电池+摔倒+心率+血氧合并在一条消息里）：
+    # 心率/血氧是可选字段，两者都携带时才顺带写入健康数据表，
+    # 不影响只上报纯GPS数据的旧设备/旧协议。
+    if req.heart_rate is not None and req.spo2 is not None:
+        upsert_health_record(
+            db,
+            HealthUploadReq(
+                device_id=req.device_id,
+                heart_rate=req.heart_rate,
+                spo2=req.spo2,
+            ),
+        )
 
 
 def get_latest(db: Session, device_id: str) -> GpsRecord | None:

@@ -5,13 +5,13 @@ class HealthUploadReq(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     # 设备端上行协议（MQTT health/upload）同时支持全称和简写字段名。
-    # 简写映射：device_id->id, heart_rate->hr, spo2->sp2
+    # 简写映射：device_id->id, heart_rate->hr, spo2->o2（旧别名 sp2 继续兼容）
     device_id: str = Field(
         min_length=1, max_length=64,
         validation_alias=AliasChoices("device_id", "id"),
     )
     heart_rate: int = Field(strict=True, validation_alias=AliasChoices("heart_rate", "hr"))
-    spo2: int = Field(strict=True, validation_alias=AliasChoices("spo2", "sp2"))
+    spo2: int = Field(strict=True, validation_alias=AliasChoices("spo2", "o2", "sp2"))
 
     @field_validator("heart_rate")
     @classmethod
