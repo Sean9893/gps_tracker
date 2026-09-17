@@ -98,11 +98,45 @@ mosquitto_sub -h 127.0.0.1 -t device/all -t 'gps/upload' -t 'health/upload' -t '
 ```
 
 `Ctrl+C` 退出。也可以反过来用 `mosquitto_pub` 在服务器本地手动模拟一条
-设备上报，验证不出服务器就能测通落库逻辑：
+设备上报，不出服务器就能测通落库逻辑：
 
 ```bash
 mosquitto_pub -h 127.0.0.1 -t device/all -m '{"device_id":"manual_test","la":31.23,"lo":121.47,"sp":0,"co":0,"st":8,"fx":1,"ba":80,"fa":0,"hr":75,"o2":98}'
 ```
+
+也可以反过来，**从本机**（不登录服务器）直接发布一条模拟上报到云端
+broker，用 `tools/publish_manual_report.py`（见下一节），服务器端开着
+`mosquitto_sub -t device/all -v` 就能实时看到这条消息。
+
+## 3.1 `publish_manual_report.py` —— 本机手动发布一条模拟上报
+
+不用跑模拟器/硬件，从本机直接向云端 MQTT broker 发一条新协议合并上报，
+用于快速验证"服务器端 mosquitto_sub 能不能实时监控到"、"后端能不能正确
+落库"、"HTTP 接口能不能读到"。
+
+```powershell
+# 最简单：默认设备号 manual_test，只带 GPS/电量字段
+python tools\publish_manual_report.py
+
+# 自定义字段，带心率/血氧
+python tools\publish_manual_report.py --device-id my_car --la 31.23 --lo 121.47 --ba 80 --hr 75 --o2 98
+
+# 模拟摔倒告警
+python tools\publish_manual_report.py --device-id my_car --fa 1
+```
+
+配合验证的完整流程：
+
+```bash
+# 终端①：登录服务器，开始监控
+ssh root@121.43.104.130 "mosquitto_sub -h 127.0.0.1 -t device/all -v"
+```
+```powershell
+# 终端②（本机）：发布一条模拟上报
+python tools\publish_manual_report.py --device-id my_car --hr 75 --o2 98
+```
+终端①应该能立刻打印出这条消息；几秒后再用 `curl`/浏览器访问
+`http://121.43.104.130:8000/api/gps/latest?device_id=my_car` 应该能查到刚上报的坐标和电量。
 
 ## 4. 后端单元测试
 
