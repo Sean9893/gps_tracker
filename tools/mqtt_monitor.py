@@ -1,9 +1,11 @@
 """GPS 轮椅追踪系统 —— 实时 MQTT 消息监控工具。
 
 订阅：
-  - gps/device/+/command  （下发给小车的摇杆坐标 / 离散指令）
-  - gps/upload            （小车 -> 云端 的 GPS/电量/摔倒检测心跳）
-  - health/upload         （小车 -> 云端 的 心率/血氧心跳）
+  - device/all            （新协议：统一总线，上行为扁平合并上报 JSON，
+                             下行为 dir=down + type 包装的指令/摇杆/紧急联系人）
+  - gps/device/+/command  （旧协议：下发给小车的摇杆坐标 / 离散指令，兼容保留）
+  - gps/upload            （旧协议：小车 -> 云端 的 GPS/电量/摔倒检测心跳，兼容保留）
+  - health/upload         （旧协议：小车 -> 云端 的 心率/血氧心跳，兼容保留）
 
 功能：
   - 每条消息实时打印一行，标明设备号、消息种类、关键字段
@@ -90,6 +92,18 @@ class Stats:
 
 
 def classify(topic: str, data: dict) -> tuple[str, str]:
+    if topic == "device/all":
+        device_id = str(data.get("device_id") or data.get("id", "?"))
+        if data.get("dir") == "down":
+            bus_type = data.get("type")
+            if bus_type == "joystick":
+                return device_id, "bus_down_joystick"
+            if bus_type == "set_emergency_contact":
+                return device_id, "bus_down_emergency"
+            return device_id, "bus_down_command"
+        # 新协议：没有 dir 字段的即为扁平合并上报（GPS+电量+摔倒+心率+血氧）
+        return device_id, "bus_report"
+
     device_id = str(data.get("device_id", "?"))
     if topic.endswith("/command"):
         if data.get("type") == "joystick" or ("x" in data and "y" in data):
@@ -103,12 +117,20 @@ def classify(topic: str, data: dict) -> tuple[str, str]:
 
 
 def format_message(kind: str, data: dict) -> str:
-    if kind == "joystick":
+    if kind in ("joystick", "bus_down_joystick"):
         x, y = data.get("x", 0), data.get("y", 0)
         dx, dy = x - 512, y - 512
         return f"x={x:4d} y={y:4d}  (dx={dx:+5d} dy={dy:+5d})"
-    if kind == "command":
+    if kind in ("command", "bus_down_command"):
         return f"command={data.get('command')}"
+    if kind == "bus_down_emergency":
+        return f"phone_number={data.get('phone_number')} contact_name={data.get('contact_name')}"
+    if kind == "bus_report":
+        return (
+            f"lat={data.get('la')} lng={data.get('lo')} speed={data.get('sp')} "
+            f"battery={data.get('ba')} fall_detected={data.get('fa')} "
+            f"heart_rate={data.get('hr')} spo2={data.get('o2')}"
+        )
     if kind == "gps_upload":
         return (
             f"lat={data.get('lat')} lng={data.get('lng')} speed={data.get('speed')} "
@@ -139,8 +161,9 @@ def main() -> None:
         client.subscribe(command_topic, qos=1)
         client.subscribe("gps/upload", qos=1)
         client.subscribe("health/upload", qos=1)
+        client.subscribe("device/all", qos=1)
         print(f"[已连接] {args.host}:{args.port}")
-        print(f"[已订阅] {command_topic}, gps/upload, health/upload\n")
+        print(f"[已订阅] {command_topic}, gps/upload, health/upload, device/all（新协议主通道）\n")
 
     def on_message(client, userdata, msg):
         try:

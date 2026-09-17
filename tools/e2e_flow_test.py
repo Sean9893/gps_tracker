@@ -1,13 +1,16 @@
 """GPS 轮椅追踪系统 —— 端到端流程测试。
 
 覆盖完整链路：
-  1. 模拟硬件设备通过 MQTT 上报 GPS + 电量 + 摔倒检测 + 心率/血氧数据
+  1. 模拟硬件设备通过 MQTT（新协议：device/all 统一总线，扁平合并 JSON）
+     上报 GPS + 电量 + 摔倒检测 + 心率/血氧数据
   2. 验证手机 APP 实际读取的 HTTP 接口（/api/gps/latest、/api/health/latest、
      /api/device/status）能正确反映这些数据（含"运动/停止"状态判定）
   3. 模拟手机 APP 拖动摇杆，驱动 /api/device/{id}/joystick 接口走完中心、
      上、下、左、右、回中全部极限位置，并验证对应的 MQTT 指令消息真实送达
+     device/all 总线（dir=down 包装）
   4. 验证摇杆坐标越界会被后端拒绝
   5. 回归验证旧的离散指令接口 /api/device/{id}/command 依然可用
+  6. 验证手机 APP 设置紧急联系人 -> 数据库存储 -> MQTT 下发给轮椅固件全链路
 
 默认直接对生产环境（后端 API + 云端 MQTT broker）跑一遍，因此使用一个专用
 的测试设备 ID（默认 e2e_test_device），不会污染真实设备的数据展示。
@@ -59,10 +62,17 @@ def record(name: str, ok: bool, detail: str = "") -> bool:
 
 
 class CommandListener:
-    """订阅某设备的 command topic，用于捕获后端实际发布到 MQTT 的消息。"""
+    """订阅统一总线 topic(device/all)，只保留发给指定设备的下行(dir=down)消息。
+
+    新协议下，后端所有下行消息（离散指令/摇杆/紧急联系人）都会同时发到
+    device/all（带 dir=down + type + id 包装）和旧的
+    gps/device/{id}/command topic（兼容保留）。这里改为监听新的统一总线，
+    以验证生产环境实际使用的主通道。
+    """
 
     def __init__(self, host: str, port: int, device_id: str, username: str = "", password: str = ""):
-        self.topic = f"gps/device/{device_id}/command"
+        self.topic = "device/all"
+        self.device_id = device_id
         self._messages: list[dict] = []
         self._lock = threading.Lock()
         self._connected = threading.Event()
@@ -87,6 +97,9 @@ class CommandListener:
         try:
             data = json.loads(msg.payload.decode("utf-8"))
         except Exception:
+            return
+        # 总线是全设备共享的，只保留发给下行(dir=down)且目标是本设备的消息。
+        if data.get("dir") != "down" or data.get("id") != self.device_id:
             return
         with self._lock:
             self._messages.append(data)
@@ -122,41 +135,35 @@ def publish_once(host: str, port: int, topic: str, payload: dict, username: str 
 
 
 def test_gps_and_health_flow(args, device_id: str) -> None:
-    print("\n=== 1. 设备上报(MQTT) -> 手机端展示(HTTP) 数据链路 ===")
+    print("\n=== 1. 设备合并上报(MQTT device/all) -> 手机端展示(HTTP) 数据链路 ===")
 
     base_lat, base_lng = 31.2304, 121.4737
     battery, satellites = 66, 9
 
-    # 第一个定位点：静止基准点
+    # 第一条合并上报：静止基准点（新协议：GPS+电量+摔倒+心率+血氧一条扁平 JSON）
     publish_once(
-        args.mqtt_host, args.mqtt_port, "gps/upload",
+        args.mqtt_host, args.mqtt_port, "device/all",
         {
-            "device_id": device_id, "lat": base_lat, "lng": base_lng, "speed": 0,
-            "course": 0, "satellites": satellites, "fix": 1, "battery": battery,
-            "fall_detected": 0,
+            "device_id": device_id, "la": base_lat, "lo": base_lng, "sp": 0,
+            "co": 0, "st": satellites, "fx": 1, "ba": battery, "fa": 0,
         },
         args.mqtt_username, args.mqtt_password,
     )
     time.sleep(1.5)
 
-    # 第二个定位点：向北偏移约 120 米（超过 10 米移动阈值），speed 提升，
-    # 用来验证 APP 端"运动/停止"状态会正确切换为"运动"。
+    # 第二条合并上报：向北偏移约 120 米（超过 10 米移动阈值），speed 提升，
+    # 同时带上心率/血氧，用来验证 APP 端"运动/停止"状态会正确切换为"运动"，
+    # 且一条消息能同时落库 gps_record 和 health_record。
     moved_lat = base_lat + 0.0011  # ~122m
     speed_kmh = 8.4
-    publish_once(
-        args.mqtt_host, args.mqtt_port, "gps/upload",
-        {
-            "device_id": device_id, "lat": moved_lat, "lng": base_lng, "speed": speed_kmh,
-            "course": 0, "satellites": satellites, "fix": 1, "battery": battery,
-            "fall_detected": 0,
-        },
-        args.mqtt_username, args.mqtt_password,
-    )
-
     heart_rate, spo2 = 82, 97
     publish_once(
-        args.mqtt_host, args.mqtt_port, "health/upload",
-        {"device_id": device_id, "heart_rate": heart_rate, "spo2": spo2},
+        args.mqtt_host, args.mqtt_port, "device/all",
+        {
+            "device_id": device_id, "la": moved_lat, "lo": base_lng, "sp": speed_kmh,
+            "co": 0, "st": satellites, "fx": 1, "ba": battery, "fa": 0,
+            "hr": heart_rate, "o2": spo2,
+        },
         args.mqtt_username, args.mqtt_password,
     )
 
@@ -168,17 +175,17 @@ def test_gps_and_health_flow(args, device_id: str) -> None:
     ok = resp.get("code") == 0
 
     record(
-        "GPS 位置上报后 /api/gps/latest 坐标正确（手机端地图/定位数据源）",
+        "合并上报后 /api/gps/latest 坐标正确（手机端地图/定位数据源）",
         ok and abs(data.get("lat", 0) - moved_lat) < 1e-6 and abs(data.get("lng", 0) - base_lng) < 1e-6,
         json.dumps(data, ensure_ascii=False),
     )
     record(
-        "速度(speed)上报后 /api/gps/latest 正确反映，且判定为运动状态（手机端速度表盘数据源）",
+        "速度(sp)上报后 /api/gps/latest 正确反映，且判定为运动状态（手机端速度表盘数据源）",
         ok and data.get("speed") == speed_kmh and data.get("moving") is True,
         json.dumps(data, ensure_ascii=False),
     )
     record(
-        "电量(battery)上报后 /api/gps/latest 正确反映（手机端电量条数据源）",
+        "电量(ba)上报后 /api/gps/latest 正确反映（手机端电量条数据源）",
         ok and data.get("battery") == battery,
         json.dumps(data, ensure_ascii=False),
     )
@@ -191,7 +198,7 @@ def test_gps_and_health_flow(args, device_id: str) -> None:
         and data.get("spo2") == spo2
     )
     record(
-        "健康数据上报后 /api/health/latest 返回正确的心率/血氧（手机端健康卡片数据源）",
+        "合并上报里的心率(hr)/血氧(o2) -> /api/health/latest 同步正确落库（一条消息写两张表）",
         ok,
         json.dumps(data, ensure_ascii=False),
     )
@@ -207,17 +214,16 @@ def test_gps_and_health_flow(args, device_id: str) -> None:
 
 
 def test_fall_detection_flow(args, device_id: str) -> None:
-    print("\n=== 1b. 摔倒检测(fall_detected) 触发 -> 恢复 数据链路 ===")
+    print("\n=== 1b. 摔倒检测(fa) 触发 -> 恢复 数据链路 ===")
 
     lat, lng = 31.2304, 121.4737
 
-    # 触发摔倒：上报 fall_detected=1
+    # 触发摔倒：合并上报 fa=1
     publish_once(
-        args.mqtt_host, args.mqtt_port, "gps/upload",
+        args.mqtt_host, args.mqtt_port, "device/all",
         {
-            "device_id": device_id, "lat": lat, "lng": lng, "speed": 0,
-            "course": 0, "satellites": 9, "fix": 1, "battery": 60,
-            "fall_detected": 1,
+            "device_id": device_id, "la": lat, "lo": lng, "sp": 0,
+            "co": 0, "st": 9, "fx": 1, "ba": 60, "fa": 1,
         },
         args.mqtt_username, args.mqtt_password,
     )
@@ -227,18 +233,17 @@ def test_fall_detection_flow(args, device_id: str) -> None:
     data = resp.get("data") or {}
     ok = resp.get("code") == 0 and data.get("fall_detected") == 1
     record(
-        "上报 fall_detected=1 后 /api/device/status 正确显示摔倒告警（手机端\"防摔报警\"红点数据源）",
+        "合并上报 fa=1 后 /api/device/status 正确显示摔倒告警（手机端\"防摔报警\"红点数据源）",
         ok,
         json.dumps(data, ensure_ascii=False),
     )
 
-    # 恢复：下一次上报 fall_detected=0 应该能清除告警
+    # 恢复：下一次合并上报 fa=0 应该能清除告警
     publish_once(
-        args.mqtt_host, args.mqtt_port, "gps/upload",
+        args.mqtt_host, args.mqtt_port, "device/all",
         {
-            "device_id": device_id, "lat": lat, "lng": lng, "speed": 0,
-            "course": 0, "satellites": 9, "fix": 1, "battery": 60,
-            "fall_detected": 0,
+            "device_id": device_id, "la": lat, "lo": lng, "sp": 0,
+            "co": 0, "st": 9, "fx": 1, "ba": 60, "fa": 0,
         },
         args.mqtt_username, args.mqtt_password,
     )
@@ -248,7 +253,7 @@ def test_fall_detection_flow(args, device_id: str) -> None:
     data = resp.get("data") or {}
     ok = resp.get("code") == 0 and data.get("fall_detected") == 0
     record(
-        "后续上报 fall_detected=0 后 /api/device/status 正确恢复正常",
+        "后续合并上报 fa=0 后 /api/device/status 正确恢复正常",
         ok,
         json.dumps(data, ensure_ascii=False),
     )
@@ -331,6 +336,44 @@ def test_discrete_command_flow(args, device_id: str) -> None:
         listener.close()
 
 
+def test_emergency_contact_flow(args, device_id: str) -> None:
+    print("\n=== 4. 手机 APP 设置紧急联系人 -> 存储 -> MQTT 下发轮椅固件 ===")
+    listener = CommandListener(args.mqtt_host, args.mqtt_port, device_id, args.mqtt_username, args.mqtt_password)
+    try:
+        phone, name = "13900001234", "E2E测试联系人"
+        resp = requests.post(
+            f"{args.api_base_url}/api/device/{device_id}/emergency-contact",
+            json={"phone_number": phone, "contact_name": name},
+            timeout=10,
+        ).json()
+        data = resp.get("data") or {}
+        http_ok = (
+            resp.get("code") == 0
+            and data.get("phone_number") == phone
+            and data.get("contact_name") == name
+        )
+        record("设置紧急联系人 -> HTTP 接口返回正确", http_ok, json.dumps(resp, ensure_ascii=False))
+
+        resp = requests.get(
+            f"{args.api_base_url}/api/device/{device_id}/emergency-contact", timeout=10
+        ).json()
+        data = resp.get("data") or {}
+        get_ok = resp.get("code") == 0 and data.get("phone_number") == phone
+        record("查询紧急联系人 -> 与刚才设置的一致（手机端联系人设置页数据源）", get_ok, json.dumps(resp, ensure_ascii=False))
+
+        msg = listener.wait_for(
+            lambda m: m.get("type") == "set_emergency_contact" and m.get("phone_number") == phone,
+            timeout=5.0,
+        )
+        record(
+            f"设置紧急联系人 -> 对应 MQTT 下发消息送达 {listener.topic}（轮椅固件据此在摔倒时自动拨号）",
+            msg is not None,
+            json.dumps(msg, ensure_ascii=False) if msg else "超时未收到",
+        )
+    finally:
+        listener.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="GPS 轮椅追踪系统端到端流程测试")
     parser.add_argument("--api-base-url", default="http://121.43.104.130:8000", help="后端 API 根地址")
@@ -349,6 +392,7 @@ def main() -> int:
     test_fall_detection_flow(args, args.device_id)
     test_joystick_flow(args, args.device_id)
     test_discrete_command_flow(args, args.device_id)
+    test_emergency_contact_flow(args, args.device_id)
 
     print("\n=== 测试汇总 ===")
     passed = sum(1 for r in RESULTS if r.ok)
