@@ -5,6 +5,15 @@
 对接生产环境（后端 `http://121.43.104.130:8000` + MQTT broker
 `121.43.104.130:1883`），也可以通过参数指向本地/其他环境。
 
+系统里所有通信都是**双向**的：小车→服务器（GPS/电量/摔倒/心率/血氧 合并
+上报）、服务器→小车（摇杆/离散指令/紧急联系人下发）。本目录里：
+- `e2e_flow_test.py` 用自动化断言的方式覆盖了两个方向（发一条上报 + 断言
+  HTTP 能读到；调一次 HTTP 下发接口 + 断言 MQTT 上真的收到了下行消息）
+- 如果想要**手机 APP 实时操作一台真实存在（但是模拟的）小车**——即打开
+  APP 摇杆页面拖动，能看到一台持续在线、会动、会上报心率/GPS 的"车"——
+  用 `../desktop/simulator_full.py`，它是一个持续运行的双向模拟小车（见
+  第 6 节），比一次性跑完就退出的 `e2e_flow_test.py` 更适合这种交互式联调。
+
 ## 环境准备
 
 ```powershell
@@ -172,3 +181,61 @@ DELETE FROM device_info WHERE device_id IN ('e2e_test_device','manual_test');
 "
 ```
 （把 `e2e_test_device`/`manual_test` 换成你实际用的 `--device-id`。）
+
+## 6. `../desktop/simulator_full.py` —— 持续运行的双向模拟小车（配合手机 APP 实时操作）
+
+和 `e2e_flow_test.py` 跑完一次性断言就退出不同，这是一个**常驻进程**，
+同时做两件事，完全模拟真实轮椅固件的行为：
+
+- **小车 -> 服务器**：每隔 `--report-interval` 秒（默认10s）自动上报一条
+  GPS+电池+摔倒+心率+血氧 合并消息到 `device/all`（位置会随机游走、电量
+  会缓慢下降、心率血氧会波动）
+- **服务器 -> 小车**：同时订阅 `device/all`，实时接收发给自己的摇杆坐标 /
+  离散指令 / 紧急联系人下发，并真实反应（按摇杆方向移动经纬度、保存紧急
+  联系人号码、摔倒时打印模拟自动拨号）
+
+用法：
+
+```powershell
+python desktop\simulator_full.py --device-id my_test_car --report-interval 5
+```
+
+跑起来之后：
+1. 打开手机 APP（或前面重新编译好的 `app-release.apk`），设备列表里就能
+   看到 `my_test_car` 在线、位置在慢慢漂移、心率血氧在变化——这些都是它
+   自动上报的（小车→服务器方向）
+2. 在 APP 里进入这台设备的遥控页面拖动摇杆 / 点方向键 / 设置紧急联系人，
+   模拟器的终端会实时打印收到的指令并让"车"做出反应（服务器→小车方向），
+   例如：
+
+```
+============================================================
+[18:27:17] 总线指令接收（目标: my_test_car）
+============================================================
+Topic: device/all
+Payload: {
+  "dir": "down",
+  "type": "joystick",
+  "id": "my_test_car",
+  "x": 512,
+  "y": 1023
+}
+[摇杆] X=512, Y=1023 -> 动作: FORWARD
+[上报] ✅ 正常 | 位置:(31.230394,121.473705) | ...
+```
+
+不方便用真机操作时，也可以用命令行模拟手机 APP 的动作直接调 HTTP 接口
+（效果和在 APP 里点是一样的，模拟器一样会实时收到并反应）：
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/my_test_car/joystick" -ContentType "application/json" -Body '{"x":512,"y":1023}'
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/my_test_car/command" -ContentType "application/json" -Body '{"command":"left"}'
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/my_test_car/emergency-contact" -ContentType "application/json" -Body '{"phone_number":"13800001111","contact_name":"测试联系人"}'
+```
+
+其他常用参数：
+```powershell
+python desktop\simulator_full.py --device-id my_test_car --auto-fall --fall-interval 60   # 每60秒自动模拟一次摔倒+5秒后恢复
+python desktop\simulator_full.py --device-id my_test_car --lat 30.2741 --lng 120.1551     # 自定义初始位置
+```
+`Ctrl+C` 停止。用完同样建议按第 5 节清理该设备号的数据。
