@@ -15,13 +15,19 @@ python -m pip install paho-mqtt requests
 
 覆盖完整链路，一次性跑完并给出 PASS/FAIL 汇总：
 
-1. 模拟小车通过 MQTT 上报 GPS + 电量 + 摔倒检测 + 心率/血氧
+1. 模拟小车通过 MQTT 统一总线 `device/all`（新协议：扁平合并 JSON，
+   无 dir/type 包装）上报 GPS + 电量 + 摔倒检测 + 心率/血氧
 2. 验证手机 APP 实际读取的接口（`/api/gps/latest`、`/api/health/latest`、
-   `/api/device/status`）正确反映这些数据，包括"运动/停止"状态判定
-3. 模拟手机端拖动摇杆，跑完中心、上、下、左、右、回中全部极限位置，
-   验证每一步都通过 `/api/device/{id}/joystick` 正确发布到 MQTT
-4. 验证摇杆坐标越界（<0 或 >1023）会被后端拒绝（HTTP 422）
-5. 回归验证旧的离散指令接口 `/api/device/{id}/command` 依然可用
+   `/api/device/status`）正确反映这些数据，包括"运动/停止"状态判定，
+   以及一条合并消息能同时正确落库 GPS 表和健康表
+3. 验证摔倒检测 `fa=1` 触发告警、`fa=0` 恢复正常
+4. 模拟手机端拖动摇杆，跑完中心、上、下、左、右、回中全部极限位置，
+   验证每一步都通过 `/api/device/{id}/joystick` 正确发布到 `device/all`
+   总线（`dir=down` 包装）
+5. 验证摇杆坐标越界（<0 或 >1023）会被后端拒绝（HTTP 422）
+6. 回归验证旧的离散指令接口 `/api/device/{id}/command` 依然可用
+7. 验证手机 APP 设置紧急联系人：HTTP 存储成功 -> HTTP 查询一致 ->
+   MQTT 正确下发到 `device/all`（轮椅固件据此在摔倒时自动拨号）
 
 用法：
 
@@ -35,15 +41,19 @@ python tools\e2e_flow_test.py --api-base-url http://127.0.0.1:8000 --mqtt-host 1
 ```
 
 退出码：全部通过为 `0`，任意一项失败为 `1`（失败项会在汇总里列出详情，
-方便定位）。
+方便定位）。测试结束后建议登录服务器清理该测试设备号的数据（见文末
+"清理测试数据"一节）。
 
-## 2. `mqtt_monitor.py` —— 实时 MQTT 消息监控
+## 2. `mqtt_monitor.py` —— 实时 MQTT 消息监控（本机客户端）
 
 订阅并实时打印：
 
-- `gps/device/+/command`：下发给小车的摇杆坐标 / 离散指令
-- `gps/upload`：小车上报的 GPS / 电量 / 摔倒检测心跳
-- `health/upload`：小车上报的心率 / 血氧心跳
+- `device/all`：**新协议主通道**。上行是设备扁平合并上报（打印为
+  `bus_report`：lat/lng/speed/battery/fall_detected/heart_rate/spo2）；
+  下行是云端下发的指令/摇杆/紧急联系人（`dir=down` 包装，打印为
+  `bus_down_command` / `bus_down_joystick` / `bus_down_emergency`）
+- `gps/device/+/command`：旧协议下发给小车的摇杆坐标 / 离散指令（兼容保留）
+- `gps/upload` / `health/upload`：旧协议小车上报心跳（兼容保留）
 
 每条消息实时打印一行，并每隔几秒打印一次按"设备 + 消息种类"分组的统计
 （总数、速率、距上次消息多久），摇杆消息额外统计相邻消息平均间隔
@@ -52,7 +62,7 @@ python tools\e2e_flow_test.py --api-base-url http://127.0.0.1:8000 --mqtt-host 1
 用法：
 
 ```powershell
-# 监控所有设备
+# 监控所有设备（默认直接对接生产环境 121.43.104.130）
 python tools\mqtt_monitor.py
 
 # 只看某一台设备，统计间隔改成 10 秒
@@ -65,14 +75,66 @@ python tools\mqtt_monitor.py --host 127.0.0.1 --port 1883
 `Ctrl+C` 退出。建议在跑 `e2e_flow_test.py` 或用手机 APP 实际操作摇杆时，
 开一个终端跑这个监控脚本，可以直观看到每一步操作对应的 MQTT 消息。
 
-## 3. 后端单元测试
+## 3. 服务器端原生 `mosquitto_sub` 监控
 
-`backend/tests/test_joystick_api.py` 是不依赖网络/数据库的快速单元测试，
-验证摇杆坐标边界校验、MQTT 发布调用参数、以及新增摇杆接口没有破坏原有
-离散指令接口。跟随现有测试一起跑：
+不依赖本机 Python 环境，直接 SSH 登录服务器、用 Mosquitto 自带的命令行
+工具订阅 broker，适合快速排查/不方便装 Python 依赖的场合。
+
+```bash
+# 登录服务器
+ssh root@121.43.104.130
+
+# 监控新协议统一总线（-v 会同时打印 topic 名和内容）
+mosquitto_sub -h 127.0.0.1 -t device/all -v
+
+# 只看某一台设备的合并上报 / 下行消息，用 jq 过滤（需要先 apt install jq）
+mosquitto_sub -h 127.0.0.1 -t device/all -v | grep '"device_id": "gps_001"\|"id": "gps_001"'
+
+# 同时监控旧协议三个 topic（用 # 通配或分开订阅）
+mosquitto_sub -h 127.0.0.1 -t 'gps/upload' -t 'health/upload' -t 'gps/device/+/command' -v
+
+# 一次性订阅所有相关 topic（新+旧协议全覆盖）
+mosquitto_sub -h 127.0.0.1 -t device/all -t 'gps/upload' -t 'health/upload' -t 'gps/device/+/command' -v
+```
+
+`Ctrl+C` 退出。也可以反过来用 `mosquitto_pub` 在服务器本地手动模拟一条
+设备上报，验证不出服务器就能测通落库逻辑：
+
+```bash
+mosquitto_pub -h 127.0.0.1 -t device/all -m '{"device_id":"manual_test","la":31.23,"lo":121.47,"sp":0,"co":0,"st":8,"fx":1,"ba":80,"fa":0,"hr":75,"o2":98}'
+```
+
+## 4. 后端单元测试
+
+`backend/tests/` 下是不依赖网络的快速单元测试，覆盖摇杆坐标边界校验、
+MQTT 发布调用参数、合并上报解析（新旧字段名/缩写字段名兼容）、GPS+健康
+数据双写等逻辑。跟随现有测试一起跑：
 
 ```powershell
 cd backend
 python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
 ```
+
+也可以直接在服务器上跑（用服务器自己的 venv，验证的是生产环境实际部署
+的代码）：
+
+```bash
+ssh root@121.43.104.130 "cd /opt/gps-tracker-system/backend && ./.venv/bin/python -m unittest discover -s tests"
+```
+
+## 5. 清理测试数据
+
+`e2e_flow_test.py` 和手动 `mosquitto_pub` 测试都会往生产数据库写入记录。
+用完后建议登录服务器清理，避免污染设备列表：
+
+```bash
+ssh root@121.43.104.130
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e "
+DELETE FROM gps_record WHERE device_id IN ('e2e_test_device','manual_test');
+DELETE FROM health_record WHERE device_id IN ('e2e_test_device','manual_test');
+DELETE FROM device_emergency_contact WHERE device_id IN ('e2e_test_device','manual_test');
+DELETE FROM device_info WHERE device_id IN ('e2e_test_device','manual_test');
+"
+```
+（把 `e2e_test_device`/`manual_test` 换成你实际用的 `--device-id`。）
