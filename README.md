@@ -2,7 +2,7 @@
 
 一个完整的 GPS 轮椅定位与健康监控系统，支持实时定位、轨迹回放、远程遥控、摔倒检测、紧急联系人自动拨号等功能。
 
-**生产环境**：`http://115.29.222.45:8000`（HTTP API）+ `115.29.222.45:1883`（MQTT Broker）
+**生产环境**：`http://121.43.104.130:8000`（HTTP API）+ `121.43.104.130:1883`（MQTT Broker）
 
 ---
 
@@ -87,14 +87,14 @@
 
 | 服务 | 地址 | 端口 | 协议 | 认证 |
 |---|---|---|---|---|
-| **HTTP 后端 API** | `115.29.222.45` | `8000` | HTTP | 无 |
-| **MQTT Broker** | `115.29.222.45` | `1883` | MQTT/TCP | 匿名（无需用户名密码） |
+| **HTTP 后端 API** | `121.43.104.130` | `8000` | HTTP | 无 |
+| **MQTT Broker** | `121.43.104.130` | `1883` | MQTT/TCP | 匿名（无需用户名密码） |
 | MySQL 数据库 | `127.0.0.1` | `3306` | TCP | 内网限定，外部不可访问 |
-| SSH 管理 | `115.29.222.45` | `22` | SSH | 密钥登录 |
+| SSH 管理 | `121.43.104.130` | `22` | SSH | 密钥登录 |
 
 **快速访问**：
-- API Base URL: `http://115.29.222.45:8000`
-- MQTT Broker: `115.29.222.45:1883`（用户名/密码留空）
+- API Base URL: `http://121.43.104.130:8000`
+- MQTT Broker: `121.43.104.130:1883`（用户名/密码留空）
 
 ---
 
@@ -117,7 +117,7 @@
 #### `POST /api/gps/upload` — 上报 GPS 数据
 
 ```bash
-curl -X POST http://115.29.222.45:8000/api/gps/upload \
+curl -X POST http://121.43.104.130:8000/api/gps/upload \
   -H "Content-Type: application/json" \
   -d '{
     "device_id": "gps_001",
@@ -155,7 +155,7 @@ curl -X POST http://115.29.222.45:8000/api/gps/upload \
 #### `GET /api/gps/latest` — 查询最新定位
 
 ```bash
-curl "http://115.29.222.45:8000/api/gps/latest?device_id=gps_001"
+curl "http://121.43.104.130:8000/api/gps/latest?device_id=gps_001"
 ```
 
 **响应示例**：
@@ -185,7 +185,7 @@ curl "http://115.29.222.45:8000/api/gps/latest?device_id=gps_001"
 #### `GET /api/gps/history` — 查询历史轨迹
 
 ```bash
-curl "http://115.29.222.45:8000/api/gps/history?device_id=gps_001&start=2026-09-01T00:00:00&end=2026-09-09T23:59:59"
+curl "http://121.43.104.130:8000/api/gps/history?device_id=gps_001&start=2026-09-01T00:00:00&end=2026-09-09T23:59:59"
 ```
 
 **响应**：轨迹点数组，每点含 `lat/lng/speed/course/satellites/fix/moving/movement_distance_m`
@@ -197,7 +197,7 @@ curl "http://115.29.222.45:8000/api/gps/history?device_id=gps_001&start=2026-09-
 #### `GET /api/device/status` — 查询设备状态
 
 ```bash
-curl "http://115.29.222.45:8000/api/device/status?device_id=gps_001"
+curl "http://121.43.104.130:8000/api/device/status?device_id=gps_001"
 ```
 
 **响应示例**：
@@ -231,7 +231,7 @@ curl "http://115.29.222.45:8000/api/device/status?device_id=gps_001"
 #### `GET /api/device/list` — 设备列表
 
 ```bash
-curl "http://115.29.222.45:8000/api/device/list"
+curl "http://121.43.104.130:8000/api/device/list"
 ```
 
 **响应示例**：
@@ -256,7 +256,7 @@ curl "http://115.29.222.45:8000/api/device/list"
 #### `POST /api/device/{device_id}/command` — 发送离散指令
 
 ```bash
-curl -X POST http://115.29.222.45:8000/api/device/gps_001/command \
+curl -X POST http://121.43.104.130:8000/api/device/gps_001/command \
   -H "Content-Type: application/json" \
   -d '{"command": "forward"}'
 ```
@@ -272,7 +272,7 @@ curl -X POST http://115.29.222.45:8000/api/device/gps_001/command \
 #### `POST /api/device/{device_id}/joystick` — 发送摇杆坐标
 
 ```bash
-curl -X POST http://115.29.222.45:8000/api/device/gps_001/joystick \
+curl -X POST http://121.43.104.130:8000/api/device/gps_001/joystick \
   -H "Content-Type: application/json" \
   -d '{"x": 512, "y": 800}'
 ```
@@ -286,7 +286,7 @@ curl -X POST http://115.29.222.45:8000/api/device/gps_001/joystick \
 #### `GET /api/device/{device_id}/emergency-contact` — 查询紧急联系人
 
 ```bash
-curl "http://115.29.222.45:8000/api/device/gps_001/emergency-contact"
+curl "http://121.43.104.130:8000/api/device/gps_001/emergency-contact"
 ```
 
 **响应示例**：
@@ -308,7 +308,7 @@ curl "http://115.29.222.45:8000/api/device/gps_001/emergency-contact"
 #### `POST /api/device/{device_id}/emergency-contact` — 设置紧急联系人
 
 ```bash
-curl -X POST http://115.29.222.45:8000/api/device/gps_001/emergency-contact \
+curl -X POST http://121.43.104.130:8000/api/device/gps_001/emergency-contact \
   -H "Content-Type: application/json" \
   -d '{
     "phone_number": "13800138000",
@@ -331,7 +331,7 @@ curl -X POST http://115.29.222.45:8000/api/device/gps_001/emergency-contact \
 #### `GET /api/geofence/{device_id}` — 查询围栏配置
 
 ```bash
-curl "http://115.29.222.45:8000/api/geofence/gps_001"
+curl "http://121.43.104.130:8000/api/geofence/gps_001"
 ```
 
 **响应示例**：
@@ -358,7 +358,7 @@ curl "http://115.29.222.45:8000/api/geofence/gps_001"
 #### `PUT /api/geofence/{device_id}` — 保存围栏配置
 
 ```bash
-curl -X PUT http://115.29.222.45:8000/api/geofence/gps_001 \
+curl -X PUT http://121.43.104.130:8000/api/geofence/gps_001 \
   -H "Content-Type: application/json" \
   -d '{
     "center_lat": 30.2741,
@@ -380,7 +380,7 @@ curl -X PUT http://115.29.222.45:8000/api/geofence/gps_001 \
 #### `GET /api/health/latest` — 最新心率/血氧
 
 ```bash
-curl "http://115.29.222.45:8000/api/health/latest?device_id=gps_001"
+curl "http://121.43.104.130:8000/api/health/latest?device_id=gps_001"
 ```
 
 **响应示例**：
@@ -403,7 +403,7 @@ curl "http://115.29.222.45:8000/api/health/latest?device_id=gps_001"
 
 ## MQTT Topic 列表
 
-**Broker**: `115.29.222.45:1883`（匿名，无需用户名密码，建议 QoS=1）
+**Broker**: `121.43.104.130:1883`（匿名，无需用户名密码，建议 QoS=1）
 
 | Topic | 方向 | Payload 示例 | 说明 |
 |---|---|---|---|
@@ -520,7 +520,7 @@ def on_message(client, userdata, msg):
 
 client = mqtt.Client()
 client.on_message = on_message
-client.connect("115.29.222.45", 1883, 60)
+client.connect("121.43.104.130", 1883, 60)
 client.subscribe("gps/device/gps_001/command", qos=1)
 client.loop_forever()
 ```
@@ -625,7 +625,7 @@ flutter pub get
 flutter run
 
 # 构建 APK（指定服务器地址）
-flutter build apk --release --dart-define=API_BASE_URL=http://115.29.222.45:8000
+flutter build apk --release --dart-define=API_BASE_URL=http://121.43.104.130:8000
 ```
 
 ---
@@ -666,13 +666,13 @@ python desktop/simulator_full.py --device-id gps_003 --lat 39.9042 --lng 116.407
 
 ```bash
 # 监控所有设备
-python tools/mqtt_monitor.py --host 115.29.222.45
+python tools/mqtt_monitor.py --host 121.43.104.130
 
 # 监控特定设备
-python tools/mqtt_monitor.py --host 115.29.222.45 --device-id gps_001
+python tools/mqtt_monitor.py --host 121.43.104.130 --device-id gps_001
 
 # 自定义统计间隔
-python tools/mqtt_monitor.py --host 115.29.222.45 --stats-interval 10
+python tools/mqtt_monitor.py --host 121.43.104.130 --stats-interval 10
 ```
 
 ---
@@ -683,7 +683,7 @@ python tools/mqtt_monitor.py --host 115.29.222.45 --stats-interval 10
 
 ```bash
 # 测试生产环境
-python tools/e2e_flow_test.py --api-url http://115.29.222.45:8000 --mqtt-host 115.29.222.45
+python tools/e2e_flow_test.py --api-url http://121.43.104.130:8000 --mqtt-host 121.43.104.130
 
 # 使用自定义设备ID
 python tools/e2e_flow_test.py --device-id test_device_001
@@ -700,24 +700,24 @@ python tools/e2e_flow_test.py -v
 
 #### 查询设备列表
 ```powershell
-Invoke-RestMethod -Uri "http://115.29.222.45:8000/api/device/list" | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri "http://121.43.104.130:8000/api/device/list" | ConvertTo-Json -Depth 5
 ```
 
 #### 查询设备状态
 ```powershell
-Invoke-RestMethod -Uri "http://115.29.222.45:8000/api/device/status?device_id=gps_001" | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri "http://121.43.104.130:8000/api/device/status?device_id=gps_001" | ConvertTo-Json -Depth 5
 ```
 
 #### 设置紧急联系人
 ```powershell
 $body = @{phone_number="13800138000"; contact_name="测试"} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_001/emergency-contact" -ContentType "application/json" -Body $body | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/gps_001/emergency-contact" -ContentType "application/json" -Body $body | ConvertTo-Json
 ```
 
 #### 发送摇杆指令
 ```powershell
 $body = @{x=512; y=800} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_001/joystick" -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/gps_001/joystick" -ContentType "application/json" -Body $body
 ```
 
 ---
@@ -728,7 +728,7 @@ Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_00
 ```bash
 ssh aliyun-gps
 # 或
-ssh root@115.29.222.45
+ssh root@121.43.104.130
 ```
 
 #### 服务管理
@@ -749,19 +749,19 @@ journalctl -u gps-tracker.service -n 50 --no-pager
 #### 数据库查询
 ```bash
 # 登录 MySQL
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker
 
 # 查看所有设备
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e "SELECT device_id, device_name, last_online_time, fall_detected FROM device_info;"
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e "SELECT device_id, device_name, last_online_time, fall_detected FROM device_info;"
 
 # 查看最新GPS记录
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e "SELECT device_id, lat, lng, battery, fall_detected, utc_time FROM gps_record ORDER BY utc_time DESC LIMIT 10;"
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e "SELECT device_id, lat, lng, battery, fall_detected, utc_time FROM gps_record ORDER BY utc_time DESC LIMIT 10;"
 
 # 查看紧急联系人配置
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e "SELECT * FROM device_emergency_contact;"
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e "SELECT * FROM device_emergency_contact;"
 
 # 查看摔倒的设备
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e "SELECT device_id, device_name FROM device_info WHERE fall_detected = 1;"
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e "SELECT device_id, device_name FROM device_info WHERE fall_detected = 1;"
 ```
 
 #### MQTT Broker 监控
@@ -861,7 +861,7 @@ MIT
 
 ## 技术支持
 
-- **服务器地址**：`115.29.222.45`
+- **服务器地址**：`121.43.104.130`
 - **HTTP API**：端口 `8000`
 - **MQTT Broker**：端口 `1883`
 - **问题反馈**：提交 GitHub Issue

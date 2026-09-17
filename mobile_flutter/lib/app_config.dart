@@ -14,6 +14,6 @@ class AppConfig {
   // Release builds should pass --dart-define=API_BASE_URL=http(s)://host:port.
   static const String defaultApiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://115.29.222.45:8000',
+    defaultValue: 'http://121.43.104.130:8000',
   );
 }

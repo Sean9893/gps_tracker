@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Subscribe to MQTT device commands and print simulated car actions."
     )
-    parser.add_argument("--host", default="115.29.222.45", help="MQTT broker host")
+    parser.add_argument("--host", default="121.43.104.130", help="MQTT broker host")
     parser.add_argument("--port", type=int, default=1883, help="MQTT broker port")
     parser.add_argument("--device-id", default="gps_001", help="Device ID to simulate")
     parser.add_argument(
@@ -54,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--password", default="", help="MQTT password")
     parser.add_argument(
         "--api-base-url",
-        default="http://115.29.222.45:8000",
+        default="http://121.43.104.130:8000",
         help="Backend base URL used to keep the simulated car online.",
     )
     parser.add_argument(

@@ -348,7 +348,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="GPS轮椅完整功能模拟器（单一总线topic + 合并上报协议）")
 
     # 服务器配置
-    parser.add_argument("--host", default="115.29.222.45", help="MQTT服务器")
+    parser.add_argument("--host", default="121.43.104.130", help="MQTT服务器")
     parser.add_argument("--port", type=int, default=1883, help="MQTT端口")
     parser.add_argument("--username", default="", help="MQTT用户名")
     parser.add_argument("--password", default="", help="MQTT密码")

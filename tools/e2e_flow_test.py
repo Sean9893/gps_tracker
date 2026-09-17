@@ -333,8 +333,8 @@ def test_discrete_command_flow(args, device_id: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="GPS 轮椅追踪系统端到端流程测试")
-    parser.add_argument("--api-base-url", default="http://115.29.222.45:8000", help="后端 API 根地址")
-    parser.add_argument("--mqtt-host", default="115.29.222.45", help="MQTT broker 地址")
+    parser.add_argument("--api-base-url", default="http://121.43.104.130:8000", help="后端 API 根地址")
+    parser.add_argument("--mqtt-host", default="121.43.104.130", help="MQTT broker 地址")
     parser.add_argument("--mqtt-port", type=int, default=1883, help="MQTT broker 端口")
     parser.add_argument("--mqtt-username", default="", help="MQTT 用户名（如无鉴权留空）")
     parser.add_argument("--mqtt-password", default="", help="MQTT 密码（如无鉴权留空）")

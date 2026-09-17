@@ -21,13 +21,13 @@ python D:\code\gps-tracker-system\desktop\simulator_full.py --device-id gps_001 
 ### 1.2 MQTT 实时监控（订阅所有消息）
 ```powershell
 # 监控指令下发（摇杆/离散命令/紧急联系人）
-python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 115.29.222.45
+python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 121.43.104.130
 
 # 监控特定设备
-python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 115.29.222.45 --device-id gps_001
+python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 121.43.104.130 --device-id gps_001
 
 # 自定义统计间隔
-python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 115.29.222.45 --stats-interval 10
+python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 121.43.104.130 --stats-interval 10
 ```
 
 ### 1.3 完整集成测试（包含摔倒检测、紧急联系人）
@@ -36,7 +36,7 @@ python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 115.29.222.45 --s
 python D:\code\gps-tracker-system\tools\e2e_flow_test.py --device-id test_device_001
 
 # 测试生产环境
-python D:\code\gps-tracker-system\tools\e2e_flow_test.py --api-url http://115.29.222.45:8000 --mqtt-host 115.29.222.45
+python D:\code\gps-tracker-system\tools\e2e_flow_test.py --api-url http://121.43.104.130:8000 --mqtt-host 121.43.104.130
 
 # 查看详细输出
 python D:\code\gps-tracker-system\tools\e2e_flow_test.py -v
@@ -45,22 +45,22 @@ python D:\code\gps-tracker-system\tools\e2e_flow_test.py -v
 ### 1.4 手动 API 测试
 ```powershell
 # 查询设备列表
-Invoke-RestMethod -Uri "http://115.29.222.45:8000/api/device/list" | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri "http://121.43.104.130:8000/api/device/list" | ConvertTo-Json -Depth 5
 
 # 查询设备状态
-Invoke-RestMethod -Uri "http://115.29.222.45:8000/api/device/status?device_id=gps_001" | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri "http://121.43.104.130:8000/api/device/status?device_id=gps_001" | ConvertTo-Json -Depth 5
 
 # 设置紧急联系人
 $body = @{phone_number="13800138000"; contact_name="测试联系人"} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_001/emergency-contact" -ContentType "application/json" -Body $body | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/gps_001/emergency-contact" -ContentType "application/json" -Body $body | ConvertTo-Json
 
 # 发送摇杆指令
 $body = @{x=512; y=800} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_001/joystick" -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/gps_001/joystick" -ContentType "application/json" -Body $body
 
 # 发送离散指令
 $body = @{command="forward"} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_001/command" -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/gps_001/command" -ContentType "application/json" -Body $body
 ```
 
 ---
@@ -71,7 +71,7 @@ Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_00
 ```bash
 ssh aliyun-gps
 # 或
-ssh root@115.29.222.45
+ssh root@121.43.104.130
 ```
 
 ### 2.2 后端服务管理
@@ -101,10 +101,10 @@ journalctl -u gps-tracker.service --since today --no-pager
 ### 2.3 数据库监控
 ```bash
 # 登录 MySQL
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker
 
 # 或直接执行查询
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e "查询语句"
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e "查询语句"
 ```
 
 **常用 SQL 查询**：
@@ -180,7 +180,7 @@ df -h
 du -sh /opt/gps-tracker-system
 
 # 查看数据库大小
-mysql -u gps_user -p'GPSTracker2026!' -e "
+mysql -u gps_user -p'GpsNewSrv2026!' -e "
 SELECT 
   table_schema AS 'Database',
   ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS 'Size (MB)' 
@@ -211,13 +211,13 @@ tail -f /var/log/syslog
 ### 2.7 数据库备份
 ```bash
 # 备份整个数据库
-mysqldump -u gps_user -p'GPSTracker2026!' gps_tracker > /tmp/gps_tracker_backup_$(date +%Y%m%d_%H%M%S).sql
+mysqldump -u gps_user -p'GpsNewSrv2026!' gps_tracker > /tmp/gps_tracker_backup_$(date +%Y%m%d_%H%M%S).sql
 
 # 只备份表结构
-mysqldump -u gps_user -p'GPSTracker2026!' --no-data gps_tracker > /tmp/gps_tracker_schema.sql
+mysqldump -u gps_user -p'GpsNewSrv2026!' --no-data gps_tracker > /tmp/gps_tracker_schema.sql
 
 # 恢复备份
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker < /tmp/gps_tracker_backup_20260909.sql
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker < /tmp/gps_tracker_backup_20260909.sql
 ```
 
 ---
@@ -227,17 +227,17 @@ mysql -u gps_user -p'GPSTracker2026!' gps_tracker < /tmp/gps_tracker_backup_2026
 ### 3.1 完整功能测试流程
 ```bash
 # 1. 服务器端：开启实时日志监控
-ssh aliyun-gps "journalctl -u gps-tracker.service -f"
+ssh root@121.43.104.130 "journalctl -u gps-tracker.service -f"
 
 # 2. 本机端：启动模拟器（新窗口）
 python D:\code\gps-tracker-system\desktop\simulator_full.py --device-id gps_test_001 --auto-fall
 
 # 3. 本机端：启动 MQTT 监控（新窗口）
-python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 115.29.222.45 --device-id gps_test_001
+python D:\code\gps-tracker-system\tools\mqtt_monitor.py --host 121.43.104.130 --device-id gps_test_001
 
 # 4. 本机端：通过 APP 或 API 设置紧急联系人
 $body = @{phone_number="13800138000"; contact_name="测试"} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_test_001/emergency-contact" -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/gps_test_001/emergency-contact" -ContentType "application/json" -Body $body
 
 # 5. 观察模拟器是否收到紧急联系人下发消息
 
@@ -249,7 +249,7 @@ Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_te
 
 # 7. 通过 APP 或 API 发送遥控指令
 $body = @{x=512; y=800} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_test_001/joystick" -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/gps_test_001/joystick" -ContentType "application/json" -Body $body
 
 # 8. 观察模拟器是否收到指令并更新位置
 ```
@@ -262,7 +262,7 @@ Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_te
 }
 
 # 服务器端监控资源
-ssh aliyun-gps "top -b -n 1 | head -20"
+ssh root@121.43.104.130 "top -b -n 1 | head -20"
 ```
 
 ---
@@ -272,42 +272,42 @@ ssh aliyun-gps "top -b -n 1 | head -20"
 ### 4.1 模拟器连接不上 MQTT
 ```powershell
 # 测试 MQTT 端口连通性
-Test-NetConnection -ComputerName 115.29.222.45 -Port 1883
+Test-NetConnection -ComputerName 121.43.104.130 -Port 1883
 
 # 服务器端检查 Mosquitto
-ssh aliyun-gps "systemctl status mosquitto"
-ssh aliyun-gps "netstat -tlnp | grep 1883"
+ssh root@121.43.104.130 "systemctl status mosquitto"
+ssh root@121.43.104.130 "netstat -tlnp | grep 1883"
 ```
 
 ### 4.2 API 请求失败
 ```powershell
 # 测试 API 连通性
-Test-NetConnection -ComputerName 115.29.222.45 -Port 8000
+Test-NetConnection -ComputerName 121.43.104.130 -Port 8000
 
 # 服务器端检查后端服务
-ssh aliyun-gps "systemctl status gps-tracker.service"
-ssh aliyun-gps "curl http://127.0.0.1:8000/api/device/list"
+ssh root@121.43.104.130 "systemctl status gps-tracker.service"
+ssh root@121.43.104.130 "curl http://127.0.0.1:8000/api/device/list"
 ```
 
 ### 4.3 数据未入库
 ```bash
 # 服务器端：检查后端日志
-ssh aliyun-gps "journalctl -u gps-tracker.service -n 100 --no-pager | grep -i error"
+ssh root@121.43.104.130 "journalctl -u gps-tracker.service -n 100 --no-pager | grep -i error"
 
 # 检查数据库连接
-ssh aliyun-gps "mysql -u gps_user -p'GPSTracker2026!' -e 'SELECT 1'"
+ssh root@121.43.104.130 "mysql -u gps_user -p'GpsNewSrv2026!' -e 'SELECT 1'"
 
 # 检查 MQTT 消费者是否运行
-ssh aliyun-gps "journalctl -u gps-tracker.service --since '5 minutes ago' | grep -i mqtt"
+ssh root@121.43.104.130 "journalctl -u gps-tracker.service --since '5 minutes ago' | grep -i mqtt"
 ```
 
 ### 4.4 摔倒检测不生效
 ```bash
 # 检查数据库字段
-ssh aliyun-gps "mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e 'SELECT device_id, fall_detected FROM device_info'"
+ssh root@121.43.104.130 "mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e 'SELECT device_id, fall_detected FROM device_info'"
 
 # 检查最近的 GPS 上报
-ssh aliyun-gps "mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e 'SELECT device_id, fall_detected, utc_time FROM gps_record ORDER BY utc_time DESC LIMIT 5'"
+ssh root@121.43.104.130 "mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e 'SELECT device_id, fall_detected, utc_time FROM gps_record ORDER BY utc_time DESC LIMIT 5'"
 ```
 
 ---
@@ -316,7 +316,7 @@ ssh aliyun-gps "mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e 'SELECT dev
 
 ### 5.1 一键清空测试数据
 ```bash
-ssh aliyun-gps "mysql -u gps_user -p'GPSTracker2026!' gps_tracker <<EOF
+ssh root@121.43.104.130 "mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker <<EOF
 DELETE FROM gps_record WHERE device_id LIKE 'gps_test_%' OR device_id LIKE 'test_%';
 DELETE FROM health_data WHERE device_id LIKE 'gps_test_%' OR device_id LIKE 'test_%';
 DELETE FROM device_emergency_contact WHERE device_id LIKE 'gps_test_%' OR device_id LIKE 'test_%';
@@ -328,12 +328,12 @@ EOF
 
 ### 5.2 快速查看系统状态
 ```bash
-ssh aliyun-gps "
+ssh root@121.43.104.130 "
 echo '=== 服务状态 ==='
 systemctl is-active gps-tracker.service mosquitto
 echo
 echo '=== 数据库统计 ==='
-mysql -u gps_user -p'GPSTracker2026!' gps_tracker -e 'SELECT COUNT(*) AS device_count FROM device_info; SELECT COUNT(*) AS gps_count FROM gps_record; SELECT COUNT(*) AS health_count FROM health_data;'
+mysql -u gps_user -p'GpsNewSrv2026!' gps_tracker -e 'SELECT COUNT(*) AS device_count FROM device_info; SELECT COUNT(*) AS gps_count FROM gps_record; SELECT COUNT(*) AS health_count FROM health_data;'
 echo
 echo '=== 端口监听 ==='
 netstat -tlnp | grep -E '8000|1883'

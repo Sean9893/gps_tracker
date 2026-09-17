@@ -124,14 +124,14 @@ mysql -u root -p gps_tracker < add_emergency_contact_table.sql
 
 ### 设置紧急联系人号码
 ```powershell
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/device/gps_001/emergency-contact" `
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/device/gps_001/emergency-contact" `
   -ContentType "application/json" `
   -Body '{"phone_number":"13800138000","contact_name":"测试联系人"}'
 ```
 
 ### 查询已设置的号码
 ```powershell
-Invoke-RestMethod "http://115.29.222.45:8000/api/device/gps_001/emergency-contact"
+Invoke-RestMethod "http://121.43.104.130:8000/api/device/gps_001/emergency-contact"
 ```
 
 ### 用监控工具验证 MQTT 下发
@@ -142,7 +142,7 @@ python tools\mqtt_monitor.py --device-id gps_001
 
 ### 触发摔倒（验证 APP 红色显示）
 ```powershell
-Invoke-RestMethod -Method Post -Uri "http://115.29.222.45:8000/api/gps/upload" `
+Invoke-RestMethod -Method Post -Uri "http://121.43.104.130:8000/api/gps/upload" `
   -ContentType "application/json" `
   -Body '{"device_id":"gps_001","lat":30.27,"lng":120.15,"speed":0,"course":0,"satellites":8,"fix":1,"battery":85,"fall_detected":1}'
 ```

@@ -14,7 +14,7 @@
 
 用法：
     python tools/mqtt_monitor.py
-    python tools/mqtt_monitor.py --host 115.29.222.45 --port 1883
+    python tools/mqtt_monitor.py --host 121.43.104.130 --port 1883
     python tools/mqtt_monitor.py --device-id gps_001       # 只看某一台设备
     python tools/mqtt_monitor.py --stats-interval 10
 """
@@ -121,7 +121,7 @@ def format_message(kind: str, data: dict) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="GPS 轮椅追踪系统 实时 MQTT 监控")
-    parser.add_argument("--host", default="115.29.222.45", help="MQTT broker 地址")
+    parser.add_argument("--host", default="121.43.104.130", help="MQTT broker 地址")
     parser.add_argument("--port", type=int, default=1883, help="MQTT broker 端口")
     parser.add_argument("--username", default="", help="MQTT 用户名（如无鉴权留空）")
     parser.add_argument("--password", default="", help="MQTT 密码（如无鉴权留空）")
