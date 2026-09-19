@@ -21,23 +21,25 @@ def _naive_utc(dt: datetime) -> datetime:
 
 
 def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
-    if req.fix == 0:
-        # fix=0 仍允许入库，便于状态分析
-        pass
-
     now = datetime.utcnow()
-    record = GpsRecord(
-        device_id=req.device_id,
-        utc_time=now,
-        lat=req.lat,
-        lng=req.lng,
-        speed=req.speed,
-        course=req.course,
-        satellites=req.satellites,
-        fix=req.fix,
-        battery=req.battery,
-    )
-    db.add(record)
+    has_location = req.lat is not None and req.lng is not None
+
+    # lat/lng 可以不带（例如设备暂时没有 GPS 定位，只想上报电量/摔倒/心率/
+    # 血氧）。这种情况下不写入一条 GPS 定位记录（避免出现假坐标污染轨迹），
+    # 但设备在线状态、摔倒告警状态依然照常更新。
+    if has_location:
+        record = GpsRecord(
+            device_id=req.device_id,
+            utc_time=now,
+            lat=req.lat,
+            lng=req.lng,
+            speed=req.speed,
+            course=req.course,
+            satellites=req.satellites,
+            fix=req.fix,
+            battery=req.battery,
+        )
+        db.add(record)
 
     device = db.scalar(select(DeviceInfo).where(DeviceInfo.device_id == req.device_id))
     if not device:
@@ -54,7 +56,7 @@ def upsert_gps_record(db: Session, req: GpsUploadReq) -> None:
         device.last_online_time = now
         device.fall_detected = bool(req.fall_detected)
 
-    if req.fix == 1:
+    if has_location and req.fix == 1:
         evaluate_geofence(db, req.device_id, req.lat, req.lng, now)
 
     db.commit()

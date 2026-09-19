@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class GpsUploadReq(BaseModel):
@@ -19,12 +19,16 @@ class GpsUploadReq(BaseModel):
     # 单条消息示例（GPS + 电池 + 摔倒 + 心率 + 血氧 合并上报）：
     #   {"device_id":"w01","la":31.2,"lo":121.4,"sp":0,"co":0,"st":8,"fx":1,
     #    "ba":80,"fa":0,"hr":75,"o2":99}
+    #
+    # lat/lng 为可选字段：不带经纬度时（例如设备暂时没有 GPS 定位、只想上报
+    # 电量/摔倒/心率/血氧），不会写入一条 GPS 定位记录，但仍会更新设备在线
+    # 状态、摔倒告警状态，以及（如果带了 hr+o2）写入健康数据表。
     device_id: str = Field(
         min_length=1, max_length=64,
         validation_alias=AliasChoices("device_id", "id"),
     )
-    lat: float = Field(validation_alias=AliasChoices("lat", "la"))
-    lng: float = Field(validation_alias=AliasChoices("lng", "lo"))
+    lat: float | None = Field(default=None, validation_alias=AliasChoices("lat", "la"))
+    lng: float | None = Field(default=None, validation_alias=AliasChoices("lng", "lo"))
     speed: float = Field(default=0, validation_alias=AliasChoices("speed", "sp"))
     course: float = Field(default=0, validation_alias=AliasChoices("course", "co"))
     satellites: int = Field(default=0, validation_alias=AliasChoices("satellites", "st"))
@@ -53,17 +57,29 @@ class GpsUploadReq(BaseModel):
 
     @field_validator("lat")
     @classmethod
-    def validate_lat(cls, v: float) -> float:
+    def validate_lat(cls, v: float | None) -> float | None:
+        if v is None:
+            return v
         if v < -90 or v > 90:
             raise ValueError("lat out of range")
         return v
 
     @field_validator("lng")
     @classmethod
-    def validate_lng(cls, v: float) -> float:
+    def validate_lng(cls, v: float | None) -> float | None:
+        if v is None:
+            return v
         if v < -180 or v > 180:
             raise ValueError("lng out of range")
         return v
+
+    @model_validator(mode="after")
+    def validate_lat_lng_pair(self) -> "GpsUploadReq":
+        # 经纬度要么都不带（纯电量/心率/血氧上报），要么都带（正常定位上报），
+        # 不允许只带一个（避免出现半条无意义的坐标）。
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("lat and lng must be provided together, or both omitted")
+        return self
 
     @field_validator("fix")
     @classmethod

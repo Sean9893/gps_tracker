@@ -5,6 +5,8 @@
      上报 GPS + 电量 + 摔倒检测 + 心率/血氧数据
   2. 验证手机 APP 实际读取的 HTTP 接口（/api/gps/latest、/api/health/latest、
      /api/device/status）能正确反映这些数据（含"运动/停止"状态判定）
+  2b. 验证经纬度是可选字段：不带 la/lo 的合并上报（只报电量/心率/血氧）不会
+      写入虚假定位点，但设备在线状态和健康数据依然正常更新
   3. 模拟手机 APP 拖动摇杆，驱动 /api/device/{id}/joystick 接口走完中心、
      上、下、左、右、回中全部极限位置，并验证对应的 MQTT 指令消息真实送达
      device/all 总线（dir=down 包装）
@@ -213,6 +215,56 @@ def test_gps_and_health_flow(args, device_id: str) -> None:
     )
 
 
+def test_location_less_report_flow(args, device_id: str) -> None:
+    print("\n=== 1c. 不带经纬度的合并上报（设备暂无GPS定位，只报电量/心率/血氧） ===")
+
+    # 先记一下之前的位置（前面测试已经上报过），用来验证这次不带坐标的
+    # 上报不会覆盖/污染 /api/gps/latest 里的坐标。
+    before = requests.get(
+        f"{args.api_base_url}/api/gps/latest", params={"device_id": device_id}, timeout=10
+    ).json().get("data") or {}
+    prev_lat, prev_lng = before.get("lat"), before.get("lng")
+
+    heart_rate, spo2, battery = 90, 94, 55
+    publish_once(
+        args.mqtt_host, args.mqtt_port, "device/all",
+        {
+            # 注意：这条消息不带 la/lo，验证经纬度确实是可选字段
+            "device_id": device_id, "fx": 0, "ba": battery, "fa": 0,
+            "hr": heart_rate, "o2": spo2,
+        },
+        args.mqtt_username, args.mqtt_password,
+    )
+    time.sleep(2.0)
+
+    resp = requests.get(f"{args.api_base_url}/api/gps/latest", params={"device_id": device_id}, timeout=10).json()
+    data = resp.get("data") or {}
+    ok = resp.get("code") == 0 and data.get("lat") == prev_lat and data.get("lng") == prev_lng
+    record(
+        "不带经纬度的上报不会覆盖 /api/gps/latest 原有坐标（不写入虚假定位点）",
+        ok,
+        json.dumps(data, ensure_ascii=False),
+    )
+
+    resp = requests.get(f"{args.api_base_url}/api/health/latest", params={"device_id": device_id}, timeout=10).json()
+    data = resp.get("data") or {}
+    ok = resp.get("code") == 0 and data.get("heart_rate") == heart_rate and data.get("spo2") == spo2
+    record(
+        "不带经纬度的上报里的心率/血氧依然正确写入 /api/health/latest",
+        ok,
+        json.dumps(data, ensure_ascii=False),
+    )
+
+    resp = requests.get(f"{args.api_base_url}/api/device/status", params={"device_id": device_id}, timeout=10).json()
+    data = resp.get("data") or {}
+    ok = resp.get("code") == 0 and data.get("online") is True
+    record(
+        "不带经纬度的上报依然能刷新设备在线状态 /api/device/status",
+        ok,
+        json.dumps(data, ensure_ascii=False),
+    )
+
+
 def test_fall_detection_flow(args, device_id: str) -> None:
     print("\n=== 1b. 摔倒检测(fa) 触发 -> 恢复 数据链路 ===")
 
@@ -389,6 +441,7 @@ def main() -> int:
     print(f"测试设备 ID  : {args.device_id}")
 
     test_gps_and_health_flow(args, args.device_id)
+    test_location_less_report_flow(args, args.device_id)
     test_fall_detection_flow(args, args.device_id)
     test_joystick_flow(args, args.device_id)
     test_discrete_command_flow(args, args.device_id)

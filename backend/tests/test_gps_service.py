@@ -1,9 +1,11 @@
 import unittest
 
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models.base import Base
+from app.models.device_info import DeviceInfo
 from app.models.gps_record import GpsRecord
 from app.schemas.gps import GpsUploadReq
 from app.services.gps_service import upsert_gps_record
@@ -88,6 +90,50 @@ class GpsServiceCombinedReportTest(unittest.TestCase):
         )
         self.assertEqual(req.battery, 55)
         self.assertEqual(req.fall_detected, 1)
+
+    def test_missing_lat_lng_does_not_write_gps_record_but_updates_device(self):
+        """经纬度可以不带（例如设备暂时没有定位，只想上报电量/摔倒）：
+        不应写入一条虚假的 GPS 定位记录，但设备在线状态/摔倒状态照常更新。
+        """
+        req = GpsUploadReq.model_validate(
+            {
+                "device_id": "w04",
+                "fix": 0,
+                "ba": 42,
+                "fa": 1,
+            }
+        )
+        self.assertIsNone(req.lat)
+        self.assertIsNone(req.lng)
+
+        upsert_gps_record(self.db, req)
+
+        gps_count = self.db.query(GpsRecord).filter_by(device_id="w04").count()
+        self.assertEqual(gps_count, 0)
+
+        device = self.db.query(DeviceInfo).filter_by(device_id="w04").one()
+        self.assertTrue(device.fall_detected)
+        self.assertIsNotNone(device.last_online_time)
+
+    def test_missing_lat_lng_still_writes_health_record(self):
+        """不带经纬度、但带心率+血氧时，健康数据表照常写入。"""
+        req = GpsUploadReq.model_validate(
+            {"device_id": "w05", "fix": 0, "hr": 88, "o2": 96}
+        )
+
+        upsert_gps_record(self.db, req)
+
+        health_row = get_latest_health(self.db, "w05")
+        self.assertIsNotNone(health_row)
+        self.assertEqual(health_row.heart_rate, 88)
+        self.assertEqual(health_row.spo2, 96)
+
+    def test_only_one_of_lat_lng_is_rejected(self):
+        """只带经度或只带纬度是不允许的（半条坐标没有意义）。"""
+        with self.assertRaises(ValidationError):
+            GpsUploadReq.model_validate({"device_id": "w06", "fix": 1, "la": 31.2})
+        with self.assertRaises(ValidationError):
+            GpsUploadReq.model_validate({"device_id": "w06", "fix": 1, "lo": 121.4})
 
 
 if __name__ == "__main__":
